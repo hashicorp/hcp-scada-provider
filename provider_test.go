@@ -13,8 +13,8 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hashicorp/hcp-scada-provider/internal/capability/listener"
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
+	"github.com/hashicorp/hcp-scada-provider/internal/listener"
 	"github.com/hashicorp/hcp-scada-provider/internal/test"
 )
 
