@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
 
-	"github.com/hashicorp/hcp-scada-provider/internal/capability"
 	"github.com/hashicorp/hcp-scada-provider/internal/capability/listener"
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
 	"github.com/hashicorp/hcp-scada-provider/internal/client/dialer/tcp"
@@ -31,7 +30,7 @@ const (
 )
 
 type handler struct {
-	provider capability.Provider
+	provider listener.Provider
 	listener net.Listener
 }
 

@@ -1,8 +1,6 @@
-package capability
+package listener
 
-import (
-	"net"
-)
+import "net"
 
 // Provider is used to provide a given capability when requested remotely. They
 // must return a connection that is bridged or an error.

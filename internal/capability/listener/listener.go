@@ -6,14 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/hcp-scada-provider/internal/capability"
-	excapability "github.com/hashicorp/hcp-scada-provider/pkg/capability"
+	"github.com/hashicorp/hcp-scada-provider/pkg/capability"
 )
 
 // New creates a new SCADA listener using the given configuration.
 // Requests for the HTTP capability are passed off to the listener that is
 // returned.
-func New(serviceID string) (capability.Provider, net.Listener, error) {
+func New(serviceID string) (Provider, net.Listener, error) {
 	// Create a listener and handler
 	list := newScadaListener(serviceID)
 	provider := func(capability string, meta map[string]string,
@@ -26,7 +25,7 @@ func New(serviceID string) (capability.Provider, net.Listener, error) {
 
 // scadaListener is used to return a net.Listener for incoming SCADA connections
 type scadaListener struct {
-	addr    *excapability.Addr
+	addr    *capability.Addr
 	pending chan net.Conn
 
 	closed   bool
@@ -37,7 +36,7 @@ type scadaListener struct {
 // newScadaListener returns a new listener
 func newScadaListener(cap string) *scadaListener {
 	l := &scadaListener{
-		addr:     excapability.NewAddr(cap),
+		addr:     capability.NewAddr(cap),
 		pending:  make(chan net.Conn),
 		closedCh: make(chan struct{}),
 	}
