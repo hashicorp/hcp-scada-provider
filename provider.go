@@ -115,9 +115,7 @@ func (p *Provider) Start() error {
 	}
 
 	// Set session status to connecting
-	p.sessionLock.Lock()
-	p.sessionStatus = SessionStatusConnecting
-	p.sessionLock.Unlock()
+	p.setSessionStatus(SessionStatusConnecting)
 
 	// Set the provider to its running state
 	p.stopCh = make(chan struct{})
@@ -140,12 +138,11 @@ func (p *Provider) Stop() error {
 		return nil
 	}
 
-	p.sessionLock.Lock()
-	defer p.sessionLock.Unlock()
-
 	p.logger.Info("stopping")
 	p.running = false
-	p.sessionStatus = SessionStatusDisconnected
+
+	p.setSessionStatus(SessionStatusDisconnected)
+
 	close(p.stopCh)
 	return nil
 }
@@ -250,6 +247,13 @@ func (p *Provider) SessionStatus() SessionStatus {
 	return p.sessionStatus
 }
 
+func (p *Provider) setSessionStatus(state SessionStatus) {
+	p.sessionLock.Lock()
+	defer p.sessionLock.Unlock()
+
+	p.sessionStatus = state
+}
+
 // backoffDuration is used to compute the next backoff duration
 func (p *Provider) backoffDuration() time.Duration {
 	// Use the default backoff
@@ -298,6 +302,8 @@ func (p *Provider) run() {
 		// Setup a new connection
 		client, err := p.clientSetup()
 		if err != nil {
+			// on error change the session state to connecting
+			p.setSessionStatus(SessionStatusConnecting)
 			p.wait()
 			continue
 		}
@@ -412,9 +418,7 @@ func (p *Provider) clientSetup() (_ *client.Client, err error) {
 	p.client = client
 	p.clientLock.Unlock()
 
-	p.sessionLock.Lock()
-	p.sessionStatus = SessionStatusConnected
-	p.sessionLock.Unlock()
+	p.setSessionStatus(SessionStatusConnected)
 
 	return client, nil
 }
@@ -537,9 +541,7 @@ func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *Disconnect
 	pe.p.backoffLock.Unlock()
 
 	// Clear the session information
-	pe.p.sessionLock.Lock()
-	pe.p.sessionStatus = SessionStatusDisconnected
-	pe.p.sessionLock.Unlock()
+	pe.p.setSessionStatus(SessionStatusDisconnected)
 
 	// Force the disconnect
 	time.AfterFunc(disconnectDelay, func() {
