@@ -13,8 +13,8 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hashicorp/hcp-scada-provider/internal/capability"
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
+	"github.com/hashicorp/hcp-scada-provider/internal/listener"
 	"github.com/hashicorp/hcp-scada-provider/internal/test"
 )
 
@@ -300,7 +300,7 @@ func TestProvider_ListenerStop(t *testing.T) {
 	require.NotContains(givenProvider.(*Provider).handlers, givenCapability)
 }
 
-func fooCapability(t *testing.T) capability.Provider {
+func fooCapability(t *testing.T) listener.Provider {
 	return func(capa string, meta map[string]string, conn net.Conn) error {
 		require := require.New(t)
 		require.Equal("foo", capa)

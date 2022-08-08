@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/hashicorp/hcp-scada-provider/pkg/capability"
 )
 
 func TestListener_Listener(t *testing.T) {
@@ -29,7 +31,7 @@ func TestListener_Listener(t *testing.T) {
 }
 
 func TestListener_Addr(t *testing.T) {
-	var addr interface{} = &scadaAddr{"armon/test"}
+	var addr interface{} = capability.NewAddr("armon/test")
 	_, ok := addr.(net.Addr)
 	require.True(t, ok)
 }
