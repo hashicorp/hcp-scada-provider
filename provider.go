@@ -162,6 +162,8 @@ func (p *Provider) isStopped() bool {
 //
 // New meta-data can only be set when
 // the provider is stopped.
+//
+// TODO: *update this when re-handshake is completed*
 func (p *Provider) SetMetaValue(key, value string) {
 	p.metaLock.Lock()
 	defer p.metaLock.Unlock()
@@ -190,6 +192,8 @@ func (p *Provider) GetMeta() map[string]string {
 // The method will return an existing listener if the capability already existed.
 // Listeners can be retrieved even when the provider is stopped (e.g. before it is
 // started). New capabilities can only be added while the provider is stopped.
+//
+// TODO: *update this when re-handshake is completed*
 //
 // The listener will only be closed, if it is closed explicitly by calling Close().
 // The listener will not be closed due to errors or when the provider is stopped.
