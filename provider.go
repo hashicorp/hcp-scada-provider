@@ -375,7 +375,7 @@ func (p *Provider) handleConnection(conn net.Conn) {
 }
 
 // clientSetup is used to setup a new connection
-func (p *Provider) clientSetup() (_ *client.Client, err error) {
+func (p *Provider) clientSetup() (*client.Client, error) {
 	// Reset the previous backoff
 	p.backoffLock.Lock()
 	p.noRetry = false
@@ -423,7 +423,7 @@ func (p *Provider) clientSetup() (_ *client.Client, err error) {
 }
 
 // handshake does the initial handshake
-func (p *Provider) handshake(client *client.Client) (_ *HandshakeResponse, err error) {
+func (p *Provider) handshake(client *client.Client) (*HandshakeResponse, error) {
 	// Build the set of capabilities based on the registered handlers.
 	p.handlersLock.RLock()
 	capabilities := make(map[string]int, len(p.handlers))
