@@ -20,12 +20,12 @@ import (
 )
 
 const (
-	// defaultBackoff is the amount of time we back off if we encounter and
+	// defaultBackoff is the amount of time we back off if we encounter an
 	// error, and no specific backoff is available.
 	defaultBackoff = 10 * time.Second
 
-	// disconnectDelay is how long we delay the disconnect to allow the RPC to
-	// complete.
+	// disconnectDelay is the amount of time to wait between the moment
+	// the disconnect RPC call is received and actually disconnecting the provider.
 	disconnectDelay = time.Second
 )
 
@@ -34,13 +34,13 @@ type handler struct {
 	listener net.Listener
 }
 
-// New creates a new SCADA provider instance using the given configuration.
+// New creates a new SCADA provider instance using the configuration in config.
 func New(config *Config) (SCADAProvider, error) {
 	if config.Logger == nil {
 		return nil, fmt.Errorf("failed to initialize SCADA provider: Logger must be provided")
 	}
 	if config.HCPConfig == nil {
-		return nil, fmt.Errorf("failed to initialize SCADA provider: HCP Config must be provided")
+		return nil, fmt.Errorf("failed to initialize SCADA provider: HCPConfig must be provided")
 	}
 	err := resource.Validate(config.Resource)
 	if err != nil {
@@ -79,7 +79,7 @@ type Provider struct {
 	runningLock sync.Mutex
 }
 
-// construct is used to create a new provider
+// construct is used to create a new provider.
 func construct(config *Config) (*Provider, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -160,8 +160,7 @@ func (p *Provider) isStopped() bool {
 // SetMetaValue sets the meta-data value. Empty values will not be
 // transmitted to the broker.
 //
-// In the future new meta-data value will be transmitted with the
-// next handshake. For now new meta-data can only be set when
+// New meta-data can only be set when
 // the provider is stopped.
 func (p *Provider) SetMetaValue(key, value string) {
 	p.metaLock.Lock()
@@ -190,9 +189,7 @@ func (p *Provider) GetMeta() map[string]string {
 //
 // The method will return an existing listener if the capability already existed.
 // Listeners can be retrieved even when the provider is stopped (e.g. before it is
-// started). For now new capabilities can only be added while the provider is stopped
-// (once re-handshakes are available new capabilities can be added regardless of the
-// state of the provider).
+// started). New capabilities can only be added while the provider is stopped.
 //
 // The listener will only be closed, if it is closed explicitly by calling Close().
 // The listener will not be closed due to errors or when the provider is stopped.
@@ -238,7 +235,7 @@ func (p *Provider) Listen(capability string) (net.Listener, error) {
 	return capListenerProxy, nil
 }
 
-// SessionStatus will return the status of the SCADA connection.
+// SessionStatus returns the status of the SCADA connection.
 func (p *Provider) SessionStatus() SessionStatus {
 	p.sessionLock.RLock()
 	defer p.sessionLock.RUnlock()
@@ -253,7 +250,7 @@ func (p *Provider) setSessionStatus(state SessionStatus) {
 	p.sessionStatus = state
 }
 
-// backoffDuration is used to compute the next backoff duration
+// backoffDuration is used to compute the next backoff duration.
 func (p *Provider) backoffDuration() time.Duration {
 	// Use the default backoff
 	backoff := defaultBackoff
@@ -276,7 +273,7 @@ func (p *Provider) backoffDuration() time.Duration {
 	return backoff
 }
 
-// wait is used to delay dialing on an error
+// wait is used to delay dialing on an error.
 func (p *Provider) wait() {
 	// Compute the backoff time
 	backoff := p.backoffDuration()
@@ -295,7 +292,7 @@ func (p *Provider) wait() {
 	}
 }
 
-// run is a long running routine to manage the provider
+// run is a long running routine to manage the provider.
 func (p *Provider) run() {
 	for !p.isStopped() {
 		// Setup a new connection
@@ -324,7 +321,7 @@ func (p *Provider) run() {
 	}
 }
 
-// handleSession is used to handle an established session
+// handleSession is used to handle an established session.
 func (p *Provider) handleSession(list net.Listener, doneCh chan struct{}) {
 	defer close(doneCh)
 	defer list.Close()
@@ -343,7 +340,7 @@ func (p *Provider) handleSession(list net.Listener, doneCh chan struct{}) {
 	}
 }
 
-// handleConnection handles an incoming connection
+// handleConnection handles an incoming connection.
 func (p *Provider) handleConnection(conn net.Conn) {
 	// Create an RPC server to handle inbound
 	pe := &providerEndpoint{p: p}
@@ -374,7 +371,7 @@ func (p *Provider) handleConnection(conn net.Conn) {
 	}
 }
 
-// clientSetup is used to setup a new connection
+// clientSetup is used to setup a new connection.
 func (p *Provider) clientSetup() (*client.Client, error) {
 	// Reset the previous backoff
 	p.backoffLock.Lock()
@@ -422,7 +419,7 @@ func (p *Provider) clientSetup() (*client.Client, error) {
 	return client, nil
 }
 
-// handshake does the initial handshake
+// handshake does the initial handshake.
 func (p *Provider) handshake(client *client.Client) (*HandshakeResponse, error) {
 	// Build the set of capabilities based on the registered handlers.
 	p.handlersLock.RLock()
@@ -471,22 +468,22 @@ type providerEndpoint struct {
 	hijack hijackFunc
 }
 
-// Hijacked is used to check if the connection has been hijacked
+// hijacked is used to check if the connection has been hijacked.
 func (pe *providerEndpoint) hijacked() bool {
 	return pe.hijack != nil
 }
 
-// GetHijack returns the hijack function
+// getHijack returns the hijack function.
 func (pe *providerEndpoint) getHijack() hijackFunc {
 	return pe.hijack
 }
 
-// Hijack is used to take over the yamux stream for Provider.Connect
+// setHijack is used to take over the yamux stream for Provider.Connect.
 func (pe *providerEndpoint) setHijack(cb hijackFunc) {
 	pe.hijack = cb
 }
 
-// Connect is invoked by the broker to connect to a capability
+// Connect is invoked by the broker to connect to a capability.
 func (pe *providerEndpoint) Connect(args *ConnectRequest, resp *ConnectResponse) error {
 	pe.p.logger.Info("connect requested", "capability", args.Capability)
 
@@ -523,7 +520,7 @@ func (pe *providerEndpoint) Connect(args *ConnectRequest, resp *ConnectResponse)
 	return nil
 }
 
-// Disconnect is invoked by the broker to ask us to backoff
+// Disconnect is invoked by the broker to ask us to backoff.
 func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *DisconnectResponse) error {
 	if args.Reason == "" {
 		args.Reason = "<no reason provided>"

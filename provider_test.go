@@ -55,7 +55,7 @@ func TestSCADAProvider(t *testing.T) {
 		})
 
 		r := require.New(t)
-		r.EqualError(err, "failed to initialize SCADA provider: HCP Config must be provided")
+		r.EqualError(err, "failed to initialize SCADA provider: HCPConfig must be provided")
 	})
 
 	t.Run("SCADA provider initialization fails if no Resource link location is provided", func(t *testing.T) {
