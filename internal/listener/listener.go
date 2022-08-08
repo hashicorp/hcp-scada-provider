@@ -23,7 +23,7 @@ func New(serviceID string) (Provider, net.Listener, error) {
 	return provider, list, nil
 }
 
-// scadaListener is used to return a net.Listener for incoming SCADA connections
+// scadaListener returns a net.Listener for incoming SCADA connections.
 type scadaListener struct {
 	addr    *capability.Addr
 	pending chan net.Conn
@@ -33,7 +33,7 @@ type scadaListener struct {
 	l        sync.Mutex
 }
 
-// newScadaListener returns a new listener
+// newScadaListener returns a new listener.
 func newScadaListener(cap string) *scadaListener {
 	l := &scadaListener{
 		addr:     capability.NewAddr(cap),
@@ -43,7 +43,7 @@ func newScadaListener(cap string) *scadaListener {
 	return l
 }
 
-// Push is used to add a connection to the queu
+// Push is used to add a connection to the queue.
 func (s *scadaListener) Push(conn net.Conn) error {
 	select {
 	case s.pending <- conn:

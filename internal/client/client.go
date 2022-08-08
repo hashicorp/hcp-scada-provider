@@ -24,7 +24,7 @@ const (
 	rpcTimeout = 10 * time.Second
 )
 
-// Opts is used to parameterize a Dial
+// Opts is used to parameterize a Dial.
 type Opts struct {
 	// Dialer is the Dialer used to make a network connection.
 	Dialer dialer.Dialer
@@ -44,13 +44,13 @@ type Client struct {
 	closedLock sync.Mutex
 }
 
-// Dial is used to establish a new connection over TCP
+// Dial is used to establish a new connection over TCP.
 func Dial(addr string) (*Client, error) {
 	opts := Opts{Dialer: &tcp.Dialer{}}
 	return DialOpts(addr, &opts)
 }
 
-// DialTLS is used to establish a new connection using TLS/TCP
+// DialTLS is used to establish a new connection using TLS.
 func DialTLS(addr string, tlsConf *tls.Config) (*Client, error) {
 	opts := Opts{
 		Dialer: &tcp.Dialer{
@@ -60,7 +60,7 @@ func DialTLS(addr string, tlsConf *tls.Config) (*Client, error) {
 	return DialOpts(addr, &opts)
 }
 
-// DialOpts is a parameterized Dial
+// DialOpts is a parameterized Dial.
 func DialOpts(target string, opts *Opts) (*Client, error) {
 	conn, err := opts.Dialer.Dial(target)
 	if err != nil {
@@ -69,7 +69,7 @@ func DialOpts(target string, opts *Opts) (*Client, error) {
 	return initClient(conn, opts)
 }
 
-// initClient does the common initialization
+// initClient does the common initialization.
 func initClient(conn net.Conn, opts *Opts) (*Client, error) {
 	// Send the preamble
 	_, err := conn.Write([]byte(ClientPreamble))
@@ -99,7 +99,7 @@ func initClient(conn net.Conn, opts *Opts) (*Client, error) {
 	return c, nil
 }
 
-// Close is used to terminate the client connection
+// Close is used to terminate the client connection.
 func (c *Client) Close() error {
 	c.closedLock.Lock()
 	defer c.closedLock.Unlock()
@@ -112,7 +112,7 @@ func (c *Client) Close() error {
 	return c.client.Close()
 }
 
-// RPC is used to perform an RPC
+// RPC performs a RPC call.
 func (c *Client) RPC(method string, args interface{}, resp interface{}) error {
 	// Get a stream
 	stream, err := c.Open()
@@ -127,22 +127,22 @@ func (c *Client) RPC(method string, args interface{}, resp interface{}) error {
 	return msgpackrpc.CallWithCodec(cc, method, args, resp)
 }
 
-// Accept is used to accept an incoming connection
+// Accept is used to accept an incoming connection.
 func (c *Client) Accept() (net.Conn, error) {
 	return c.client.Accept()
 }
 
-// Open is used to open an outgoing connection
+// Open is used to open an outgoing connection.
 func (c *Client) Open() (net.Conn, error) {
 	return c.client.Open()
 }
 
-// Addr is so that client can act like a net.Listener
+// Addr is so that client can act like a net.Listener.
 func (c *Client) Addr() net.Addr {
 	return c.client.LocalAddr()
 }
 
-// NumStreams returns the number of open streams on the client
+// NumStreams returns the number of open streams on the client.
 func (c *Client) NumStreams() int {
 	return c.client.NumStreams()
 }
