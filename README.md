@@ -9,3 +9,7 @@ SCADA is a variation on a [NAT traversal](https://en.wikipedia.org/wiki/NAT_trav
 ## Who uses it
 
 It's in use internally at Hashicorp.
+
+## License
+
+[Mozilla Public License v2.0](LICENSE)
