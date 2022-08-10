@@ -1,4 +1,4 @@
-# HCP SCADA Provider ![build badge](https://github.com/hashicorp/hcp-scada-provider/actions/workflows/test.yml/badge.svg??branch=main)
+# HCP SCADA Provider ![build badge](https://github.com/hashicorp/hcp-scada-provider/actions/workflows/test.yml/badge.svg?branch=main)
 
 SCADA is an internal component of the infrastructure of the [Hashicorp Cloud Platform](https://cloud.hashicorp.com/) control plane and it stands for Supervisory Control And Data Acquisition. It provides HCP with access to functions and data on HCP-managed clusters.
 
