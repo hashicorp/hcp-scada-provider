@@ -438,15 +438,9 @@ func (p *Provider) handshake(client *client.Client) (*HandshakeResponse, error) 
 		return nil, fmt.Errorf("failed to get access token: %w", err)
 	}
 
-	resource := p.config.Resource
 	req := HandshakeRequest{
-		Service: p.config.Service,
-		Resource: Resource{
-			ID:             resource.ID,
-			Type:           resource.Type,
-			ProjectID:      resource.Location.ProjectID,
-			OrganizationID: resource.Location.OrganizationID,
-		},
+		Service:  p.config.Service,
+		Resource: p.config.Resource,
 
 		AccessToken: oauthToken.AccessToken,
 

@@ -258,11 +258,13 @@ func TestProvider_Setup(t *testing.T) {
 
 	exp := &HandshakeRequest{
 		Service: "test",
-		Resource: Resource{
-			ID:             resourceID,
-			Type:           resourceType,
-			ProjectID:      projectID,
-			OrganizationID: organizationID,
+		Resource: cloud.HashicorpCloudLocationLink{
+			ID: resourceID,
+			Location: &cloud.HashicorpCloudLocationLocation{
+				ProjectID:      projectID,
+				OrganizationID: organizationID,
+			},
+			Type: resourceType,
 		},
 		ServiceVersion: "0.0.1",
 		Capabilities:   map[string]int{"foo": 1},

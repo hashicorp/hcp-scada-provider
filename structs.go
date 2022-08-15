@@ -1,6 +1,10 @@
 package scada
 
-import "time"
+import (
+	"time"
+
+	"github.com/hashicorp/hcp-sdk-go/clients/cloud-shared/v1/models"
+)
 
 type ConnectRequest struct {
 	Capability string
@@ -41,7 +45,7 @@ type HandshakeRequest struct {
 
 	// Resource is HCP Resource that is registering as a provider. This is recommended over ServiceID. The Resource's
 	// internal ID will be used to map providers to consumers which will be looked up from Resource-manager.
-	Resource Resource
+	Resource models.HashicorpCloudLocationLink
 
 	// Capabilities is the list of services that this provider can provide. This could e.g. be "gRPC" or "HTTP".
 	Capabilities map[string]int
@@ -49,23 +53,6 @@ type HandshakeRequest struct {
 	// Meta is the generic metadata for this particular session. It can include information like the EC2 instance name to identify
 	// specific nodes.
 	Meta map[string]string
-}
-
-// Resource contains information to uniquely identify a HCP Resource.
-// TODO: Decide whether to make proto link public vs keeping this struct.
-type Resource struct {
-
-	// OrganizationID is UUID of organization containing this Resource.
-	OrganizationID string
-
-	// ProjectID is UUID of project inside the organization containing this Resource.
-	ProjectID string
-
-	// Type is the type of Resource. Can be "hashicorp.cloud.cluster", etc.
-	Type string
-
-	// ID is the SlugID of the Resource that is unique within a project.
-	ID string
 }
 
 type HandshakeResponse struct {
