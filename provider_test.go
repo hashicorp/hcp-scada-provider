@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/stretchr/testify/require"
 
+	"github.com/hashicorp/hcp-scada-provider/api/types"
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
 	"github.com/hashicorp/hcp-scada-provider/internal/listener"
 	"github.com/hashicorp/hcp-scada-provider/internal/test"
@@ -200,17 +201,17 @@ func testListener(t *testing.T) (string, net.Listener) {
 
 type TestHandshake struct {
 	t      *testing.T
-	expect *HandshakeRequest
+	expect *types.HandshakeRequest
 }
 
-func (t *TestHandshake) Handshake(arg *HandshakeRequest, resp *HandshakeResponse) error {
+func (t *TestHandshake) Handshake(arg *types.HandshakeRequest, resp *types.HandshakeResponse) error {
 	require.EqualValues(t.t, t.expect, arg)
 	resp.Authenticated = true
 	resp.SessionID = "foobarbaz"
 	return nil
 }
 
-func testHandshake(t *testing.T, list net.Listener, expect *HandshakeRequest) {
+func testHandshake(t *testing.T, list net.Listener, expect *types.HandshakeRequest) {
 	require := require.New(t)
 	conn, err := list.Accept()
 	require.NoError(err)
@@ -256,13 +257,15 @@ func TestProvider_Setup(t *testing.T) {
 	_, err = p.Listen("foo")
 	require.NoError(err)
 
-	exp := &HandshakeRequest{
+	exp := &types.HandshakeRequest{
 		Service: "test",
-		Resource: Resource{
-			ID:             resourceID,
-			Type:           resourceType,
-			ProjectID:      projectID,
-			OrganizationID: organizationID,
+		Resource: cloud.HashicorpCloudLocationLink{
+			ID: resourceID,
+			Location: &cloud.HashicorpCloudLocationLocation{
+				ProjectID:      projectID,
+				OrganizationID: organizationID,
+			},
+			Type: resourceType,
 		},
 		ServiceVersion: "0.0.1",
 		Capabilities:   map[string]int{"foo": 1},
@@ -340,13 +343,13 @@ func TestProvider_Connect(t *testing.T) {
 	cc := msgpackrpc.NewCodec(false, false, stream)
 
 	// Make the connect rpc
-	args := &ConnectRequest{
+	args := &types.ConnectRequest{
 		Capability: "foo",
 		Meta: map[string]string{
 			"zip": "zap",
 		},
 	}
-	resp := &ConnectResponse{}
+	resp := &types.ConnectResponse{}
 	err = msgpackrpc.CallWithCodec(cc, "Provider.Connect", args, resp)
 	require.NoError(err)
 
@@ -382,11 +385,11 @@ func TestProvider_Disconnect(t *testing.T) {
 	cc := msgpackrpc.NewCodec(false, false, stream)
 
 	// Make the connect rpc
-	args := &DisconnectRequest{
+	args := &types.DisconnectRequest{
 		NoRetry: true,
 		Backoff: 300 * time.Second,
 	}
-	resp := &DisconnectResponse{}
+	resp := &types.DisconnectResponse{}
 	err = msgpackrpc.CallWithCodec(cc, "Provider.Disconnect", args, resp)
 	require.NoError(err)
 

@@ -1,7 +1,12 @@
-package scada
+package types
 
-import "time"
+import (
+	"time"
 
+	"github.com/hashicorp/hcp-sdk-go/clients/cloud-shared/v1/models"
+)
+
+// ConnectRequest holds parameters for the broker RPC Connect call to the provider.
 type ConnectRequest struct {
 	Capability string
 	Meta       map[string]string
@@ -10,19 +15,23 @@ type ConnectRequest struct {
 	Message  string
 }
 
+// ConnectResponse is the response to a Connect RPC call.
 type ConnectResponse struct {
 	Success bool
 }
 
+// DisconnectRequest holds parameters for the broker RPC Disconnect call to the provider.
 type DisconnectRequest struct {
 	NoRetry bool          // Should the client retry
 	Backoff time.Duration // Minimum backoff
 	Reason  string
 }
 
+// DisconnectResponse is the response to a Disconnect RPC call.
 type DisconnectResponse struct {
 }
 
+// HandshakeRequest holds parameters for the broker RPC Handshake call to the provider.
 type HandshakeRequest struct {
 	// Service is the name of a data-plane Service connecting to the broker as a provider. Examples include consul, vault, waypoint, etc.
 	Service string
@@ -41,7 +50,7 @@ type HandshakeRequest struct {
 
 	// Resource is HCP Resource that is registering as a provider. This is recommended over ServiceID. The Resource's
 	// internal ID will be used to map providers to consumers which will be looked up from Resource-manager.
-	Resource Resource
+	Resource models.HashicorpCloudLocationLink
 
 	// Capabilities is the list of services that this provider can provide. This could e.g. be "gRPC" or "HTTP".
 	Capabilities map[string]int
@@ -51,23 +60,7 @@ type HandshakeRequest struct {
 	Meta map[string]string
 }
 
-// Resource contains information to uniquely identify a HCP Resource.
-// TODO: Decide whether to make proto link public vs keeping this struct.
-type Resource struct {
-
-	// OrganizationID is UUID of organization containing this Resource.
-	OrganizationID string
-
-	// ProjectID is UUID of project inside the organization containing this Resource.
-	ProjectID string
-
-	// Type is the type of Resource. Can be "hashicorp.cloud.cluster", etc.
-	Type string
-
-	// ID is the SlugID of the Resource that is unique within a project.
-	ID string
-}
-
+// HandshakeResponse is the response to a Handshake RPC call.
 type HandshakeResponse struct {
 	Authenticated bool
 	SessionID     string
