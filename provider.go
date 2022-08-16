@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
 
+	"github.com/hashicorp/hcp-scada-provider/api/types"
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
 	"github.com/hashicorp/hcp-scada-provider/internal/client/dialer/tcp"
 	"github.com/hashicorp/hcp-scada-provider/internal/listener"
@@ -424,7 +425,7 @@ func (p *Provider) clientSetup() (*client.Client, error) {
 }
 
 // handshake does the initial handshake.
-func (p *Provider) handshake(client *client.Client) (*HandshakeResponse, error) {
+func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, error) {
 	// Build the set of capabilities based on the registered handlers.
 	p.handlersLock.RLock()
 	capabilities := make(map[string]int, len(p.handlers))
@@ -438,7 +439,7 @@ func (p *Provider) handshake(client *client.Client) (*HandshakeResponse, error) 
 		return nil, fmt.Errorf("failed to get access token: %w", err)
 	}
 
-	req := HandshakeRequest{
+	req := types.HandshakeRequest{
 		Service:  p.config.Service,
 		Resource: p.config.Resource,
 
@@ -450,7 +451,7 @@ func (p *Provider) handshake(client *client.Client) (*HandshakeResponse, error) 
 		Capabilities: capabilities,
 		Meta:         p.GetMeta(),
 	}
-	resp := new(HandshakeResponse)
+	resp := new(types.HandshakeResponse)
 	if err := client.RPC("Session.Handshake", &req, resp); err != nil {
 		return nil, err
 	}
@@ -482,7 +483,7 @@ func (pe *providerEndpoint) setHijack(cb hijackFunc) {
 }
 
 // Connect is invoked by the broker to connect to a capability.
-func (pe *providerEndpoint) Connect(args *ConnectRequest, resp *ConnectResponse) error {
+func (pe *providerEndpoint) Connect(args *types.ConnectRequest, resp *types.ConnectResponse) error {
 	pe.p.logger.Info("connect requested", "capability", args.Capability)
 
 	// Handle potential flash
@@ -519,7 +520,7 @@ func (pe *providerEndpoint) Connect(args *ConnectRequest, resp *ConnectResponse)
 }
 
 // Disconnect is invoked by the broker to ask us to backoff.
-func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *DisconnectResponse) error {
+func (pe *providerEndpoint) Disconnect(args *types.DisconnectRequest, resp *types.DisconnectResponse) error {
 	if args.Reason == "" {
 		args.Reason = "<no reason provided>"
 	}

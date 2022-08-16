@@ -1,4 +1,4 @@
-package scada
+package types
 
 import (
 	"time"
@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/hcp-sdk-go/clients/cloud-shared/v1/models"
 )
 
+// ConnectRequest holds parameters for the broker RPC Connect call to the provider.
 type ConnectRequest struct {
 	Capability string
 	Meta       map[string]string
@@ -14,19 +15,23 @@ type ConnectRequest struct {
 	Message  string
 }
 
+// ConnectResponse is the response to a Connect RPC call.
 type ConnectResponse struct {
 	Success bool
 }
 
+// DisconnectRequest holds parameters for the broker RPC Disconnect call to the provider.
 type DisconnectRequest struct {
 	NoRetry bool          // Should the client retry
 	Backoff time.Duration // Minimum backoff
 	Reason  string
 }
 
+// DisconnectResponse is the response to a Disconnect RPC call.
 type DisconnectResponse struct {
 }
 
+// HandshakeRequest holds parameters for the broker RPC Handshake call to the provider.
 type HandshakeRequest struct {
 	// Service is the name of a data-plane Service connecting to the broker as a provider. Examples include consul, vault, waypoint, etc.
 	Service string
@@ -55,6 +60,7 @@ type HandshakeRequest struct {
 	Meta map[string]string
 }
 
+// HandshakeResponse is the response to a Handshake RPC call.
 type HandshakeResponse struct {
 	Authenticated bool
 	SessionID     string
