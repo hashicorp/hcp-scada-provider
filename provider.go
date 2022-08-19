@@ -13,11 +13,11 @@ import (
 	"github.com/hashicorp/go-hclog"
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
 
-	"github.com/hashicorp/hcp-scada-provider/api/types"
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
 	"github.com/hashicorp/hcp-scada-provider/internal/client/dialer/tcp"
 	"github.com/hashicorp/hcp-scada-provider/internal/listener"
 	"github.com/hashicorp/hcp-scada-provider/internal/resource"
+	"github.com/hashicorp/hcp-scada-provider/pkg/types"
 )
 
 const (

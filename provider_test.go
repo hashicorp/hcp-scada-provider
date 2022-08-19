@@ -13,10 +13,10 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hashicorp/hcp-scada-provider/api/types"
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
 	"github.com/hashicorp/hcp-scada-provider/internal/listener"
 	"github.com/hashicorp/hcp-scada-provider/internal/test"
+	"github.com/hashicorp/hcp-scada-provider/pkg/types"
 )
 
 const (
