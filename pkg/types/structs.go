@@ -1,35 +1,8 @@
 package types
 
 import (
-	"time"
-
 	"github.com/hashicorp/hcp-sdk-go/clients/cloud-shared/v1/models"
 )
-
-// ConnectRequest holds parameters for the broker RPC Connect call to the provider.
-type ConnectRequest struct {
-	Capability string
-	Meta       map[string]string
-
-	Severity string
-	Message  string
-}
-
-// ConnectResponse is the response to a Connect RPC call.
-type ConnectResponse struct {
-	Success bool
-}
-
-// DisconnectRequest holds parameters for the broker RPC Disconnect call to the provider.
-type DisconnectRequest struct {
-	NoRetry bool          // Should the client retry
-	Backoff time.Duration // Minimum backoff
-	Reason  string
-}
-
-// DisconnectResponse is the response to a Disconnect RPC call.
-type DisconnectResponse struct {
-}
 
 // HandshakeRequest holds parameters for the broker RPC Handshake call to the provider.
 type HandshakeRequest struct {
