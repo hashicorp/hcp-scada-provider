@@ -1,4 +1,4 @@
-package scada
+package provider
 
 import (
 	"fmt"
@@ -343,13 +343,13 @@ func TestProvider_Connect(t *testing.T) {
 	cc := msgpackrpc.NewCodec(false, false, stream)
 
 	// Make the connect rpc
-	args := &types.ConnectRequest{
+	args := &ConnectRequest{
 		Capability: "foo",
 		Meta: map[string]string{
 			"zip": "zap",
 		},
 	}
-	resp := &types.ConnectResponse{}
+	resp := &ConnectResponse{}
 	err = msgpackrpc.CallWithCodec(cc, "Provider.Connect", args, resp)
 	require.NoError(err)
 
@@ -385,11 +385,11 @@ func TestProvider_Disconnect(t *testing.T) {
 	cc := msgpackrpc.NewCodec(false, false, stream)
 
 	// Make the connect rpc
-	args := &types.DisconnectRequest{
+	args := &DisconnectRequest{
 		NoRetry: true,
 		Backoff: 300 * time.Second,
 	}
-	resp := &types.DisconnectResponse{}
+	resp := &DisconnectResponse{}
 	err = msgpackrpc.CallWithCodec(cc, "Provider.Disconnect", args, resp)
 	require.NoError(err)
 
