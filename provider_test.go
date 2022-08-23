@@ -32,7 +32,7 @@ func TestSCADAProvider(t *testing.T) {
 			Service:   "test",
 			Logger:    nil,
 			HCPConfig: test.NewStaticHCPCloudDevConfig(),
-			Resource: cloud.HashicorpCloudLocationLink{
+			Resource: &cloud.HashicorpCloudLocationLink{
 				ID:       "ID",
 				Type:     "Type",
 				Location: &cloud.HashicorpCloudLocationLocation{},
@@ -48,7 +48,7 @@ func TestSCADAProvider(t *testing.T) {
 			Service:   "test",
 			Logger:    hclog.Default(),
 			HCPConfig: nil,
-			Resource: cloud.HashicorpCloudLocationLink{
+			Resource: &cloud.HashicorpCloudLocationLink{
 				ID:       "ID",
 				Type:     "Type",
 				Location: &cloud.HashicorpCloudLocationLocation{},
@@ -64,7 +64,7 @@ func TestSCADAProvider(t *testing.T) {
 			Service:   "test",
 			Logger:    hclog.Default(),
 			HCPConfig: test.NewStaticHCPCloudDevConfig(),
-			Resource: cloud.HashicorpCloudLocationLink{
+			Resource: &cloud.HashicorpCloudLocationLink{
 				ID:       "ID",
 				Type:     "",
 				Location: nil,
@@ -80,7 +80,7 @@ func TestSCADAProvider(t *testing.T) {
 			Service:   "test",
 			Logger:    hclog.Default(),
 			HCPConfig: test.NewStaticHCPCloudDevConfig(),
-			Resource: cloud.HashicorpCloudLocationLink{
+			Resource: &cloud.HashicorpCloudLocationLink{
 				ID:       "ID",
 				Type:     "",
 				Location: &cloud.HashicorpCloudLocationLocation{},
@@ -96,7 +96,7 @@ func TestSCADAProvider(t *testing.T) {
 			Service:   "test",
 			Logger:    hclog.Default(),
 			HCPConfig: test.NewStaticHCPCloudDevConfig(),
-			Resource: cloud.HashicorpCloudLocationLink{
+			Resource: &cloud.HashicorpCloudLocationLink{
 				ID:       "",
 				Type:     "Type",
 				Location: &cloud.HashicorpCloudLocationLocation{},
@@ -112,7 +112,7 @@ func TestSCADAProvider(t *testing.T) {
 			Service:   "test",
 			Logger:    hclog.Default(),
 			HCPConfig: test.NewStaticHCPCloudDevConfig(),
-			Resource: cloud.HashicorpCloudLocationLink{
+			Resource: &cloud.HashicorpCloudLocationLink{
 				ID:       "ID",
 				Type:     "Type",
 				Location: &cloud.HashicorpCloudLocationLocation{},
@@ -259,7 +259,7 @@ func TestProvider_Setup(t *testing.T) {
 
 	exp := &types.HandshakeRequest{
 		Service: "test",
-		Resource: cloud.HashicorpCloudLocationLink{
+		Resource: &cloud.HashicorpCloudLocationLink{
 			ID: resourceID,
 			Location: &cloud.HashicorpCloudLocationLocation{
 				ProjectID:      projectID,

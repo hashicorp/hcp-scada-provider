@@ -19,7 +19,7 @@ type Config struct {
 
 	// Resource contains information about the Resource the provider will
 	// register as.
-	Resource cloud.HashicorpCloudLocationLink
+	Resource *cloud.HashicorpCloudLocationLink
 
 	// HCPConfig is the HCP specific configuration, it provides information
 	// necessary to talk to HCP APIs.
@@ -41,13 +41,18 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("missing Service")
 	}
 
+	if c.Resource == nil {
+		return fmt.Errorf("missing Resource")
+	}
 	err := resource.Validate(c.Resource)
 	if err != nil {
-		return fmt.Errorf("resource is invalid: %w", err)
+		return fmt.Errorf("invalid Resource: %w", err)
 	}
+
 	if c.HCPConfig == nil {
 		return fmt.Errorf("missing HCPConfig")
 	}
+
 	if c.Logger == nil {
 		return fmt.Errorf("missing Logger")
 	}

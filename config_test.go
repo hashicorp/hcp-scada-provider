@@ -18,7 +18,7 @@ type stubHCPConfig struct {
 func validConfig() *Config {
 	return &Config{
 		Service: "my-service",
-		Resource: cloud.HashicorpCloudLocationLink{
+		Resource: &cloud.HashicorpCloudLocationLink{
 			ID:   "resource-id",
 			Type: "hashicorp.test.resource",
 			Location: &cloud.HashicorpCloudLocationLocation{
@@ -50,11 +50,18 @@ func TestConfig_Invalid(t *testing.T) {
 			expectedError: "missing Service",
 		},
 		{
+			name: "missing resource",
+			mutate: func(config *Config) {
+				config.Resource = nil
+			},
+			expectedError: "missing Resource",
+		},
+		{
 			name: "invalid resource",
 			mutate: func(config *Config) {
 				config.Resource.ID = ""
 			},
-			expectedError: "resource is invalid: missing resource ID",
+			expectedError: "invalid Resource: missing resource ID",
 		},
 		{
 			name: "missing HCP Config",
@@ -91,7 +98,7 @@ func testProviderConfig() *Config {
 			"127.0.0.1:65500", // Blackhole
 			false,
 		),
-		Resource: cloud.HashicorpCloudLocationLink{
+		Resource: &cloud.HashicorpCloudLocationLink{
 			ID:   resourceID,
 			Type: resourceType,
 			Location: &cloud.HashicorpCloudLocationLocation{
