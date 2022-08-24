@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/hashicorp/hcp-scada-provider/pkg/capability"
+	"github.com/hashicorp/hcp-scada-provider/capability"
 )
 
 func TestListener_Listener(t *testing.T) {

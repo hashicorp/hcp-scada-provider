@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/hcp-scada-provider/pkg/capability"
+	"github.com/hashicorp/hcp-scada-provider/capability"
 )
 
 // New creates a new SCADA listener using the given configuration.
