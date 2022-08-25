@@ -293,7 +293,6 @@ func (p *Provider) wait(ctx context.Context) {
 
 // run is a long running routine to manage the provider.
 func (p *Provider) run() {
-	defer close(p.statuses)
 	// setup a context that will
 	// cancel on stop
 	ctx, cancel := context.WithCancel(context.Background())
