@@ -1,7 +1,7 @@
 package client
 
 import (
-	"crypto/tls"
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -12,7 +12,6 @@ import (
 	"github.com/hashicorp/yamux"
 
 	"github.com/hashicorp/hcp-scada-provider/internal/client/dialer"
-	"github.com/hashicorp/hcp-scada-provider/internal/client/dialer/tcp"
 )
 
 const (
@@ -44,25 +43,18 @@ type Client struct {
 	closedLock sync.Mutex
 }
 
-// Dial is used to establish a new connection over TCP.
-func Dial(addr string) (*Client, error) {
-	opts := Opts{Dialer: &tcp.Dialer{}}
-	return DialOpts(addr, &opts)
-}
-
-// DialTLS is used to establish a new connection using TLS.
-func DialTLS(addr string, tlsConf *tls.Config) (*Client, error) {
-	opts := Opts{
-		Dialer: &tcp.Dialer{
-			TLSConfig: tlsConf,
-		},
-	}
-	return DialOpts(addr, &opts)
-}
-
 // DialOpts is a parameterized Dial.
 func DialOpts(target string, opts *Opts) (*Client, error) {
 	conn, err := opts.Dialer.Dial(target)
+	if err != nil {
+		return nil, err
+	}
+	return initClient(conn, opts)
+}
+
+// DialOptsContext is a parameterized Dial.
+func DialOptsContext(ctx context.Context, target string, opts *Opts) (*Client, error) {
+	conn, err := opts.Dialer.DialContext(ctx, target)
 	if err != nil {
 		return nil, err
 	}

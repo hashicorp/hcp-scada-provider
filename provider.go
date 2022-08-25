@@ -84,11 +84,6 @@ func construct(config *Config) (*Provider, error) {
 		return nil, err
 	}
 
-	// Create a closed channel to use for stopCh, as the provider is initially
-	// stopped.
-	closedCh := make(chan struct{})
-	close(closedCh)
-
 	p := &Provider{
 		config:        config,
 		logger:        config.Logger.Named("scada-provider"),
@@ -299,8 +294,6 @@ func (p *Provider) run() {
 	defer cancel()
 
 	var c *client.Client
-	var clients = make(chan *client.Client)
-	defer close(clients)
 	// engage in running the provider
 	for {
 		select {
@@ -316,18 +309,25 @@ func (p *Provider) run() {
 				// backoff
 				go func() {
 					p.wait(ctx)
-					p.statuses <- SessionStatusConnecting
+					// try to write SessionStatusConnecting
+					// or return if SessionStatusDisconnected cancelled the context
+					select {
+					case <-ctx.Done():
+					case p.statuses <- SessionStatusConnecting:
+					}
 				}()
 
 			case SessionStatusConnecting:
 				p.sessionStatus = SessionStatusConnecting
 				// Try to connect a session
 				go func() {
-					if client, err := p.connect(ctx); err == nil {
-						clients <- client
-						p.statuses <- SessionStatusConnected
-					} else {
+					// if we get SessionStatusDisconnected during this,
+					// connect will error out and we go to SessionStatusWaiting
+					if cc, err := p.connect(ctx); err != nil {
 						p.statuses <- SessionStatusWaiting
+					} else {
+						c = cc
+						p.statuses <- SessionStatusConnected
 					}
 				}()
 
@@ -354,9 +354,6 @@ func (p *Provider) run() {
 				p.backoffReset()
 				cancel()
 			}
-
-		case c = <-clients:
-			// updated the pointer c to the newest connected client
 
 		case <-ctx.Done():
 			return
@@ -453,7 +450,7 @@ func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 		},
 		LogOutput: p.logger.StandardWriter(&hclog.StandardLoggerOptions{InferLevels: true}),
 	}
-	client, err := client.DialOpts(p.config.HCPConfig.SCADAAddress(), &opts)
+	client, err := client.DialOptsContext(ctx, p.config.HCPConfig.SCADAAddress(), &opts)
 	if err != nil {
 		p.logger.Error("failed to dial SCADA endpoint", "error", err)
 		return nil, err
