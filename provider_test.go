@@ -1,6 +1,7 @@
 package scada
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/rpc"
@@ -211,11 +212,10 @@ func (t *TestHandshake) Handshake(arg *types.HandshakeRequest, resp *types.Hands
 	return nil
 }
 
-func testHandshake(t *testing.T, list net.Listener, expect *types.HandshakeRequest) {
+func testHandshake(t *testing.T, list net.Listener, expect *types.HandshakeRequest) net.Conn {
 	require := require.New(t)
 	conn, err := list.Accept()
 	require.NoError(err)
-	defer conn.Close()
 
 	preamble := make([]byte, len(client.ClientPreamble))
 	n, err := conn.Read(preamble)
@@ -231,6 +231,8 @@ func testHandshake(t *testing.T, list net.Listener, expect *types.HandshakeReque
 	rpcSrv := rpc.NewServer()
 	_ = rpcSrv.RegisterName("Session", &TestHandshake{t, expect})
 	require.NoError(rpcSrv.ServeRequest(rpcCodec))
+
+	return conn
 }
 
 func TestProvider_Setup(t *testing.T) {
@@ -271,14 +273,15 @@ func TestProvider_Setup(t *testing.T) {
 		Capabilities:   map[string]int{"foo": 1},
 		Meta:           map[string]string{},
 	}
-	testHandshake(t, list, exp)
+	conn := testHandshake(t, list, exp)
+	defer conn.Close()
 
 	start := time.Now()
-	for time.Since(start) < time.Second {
+	for time.Since(start) < 1*time.Second {
 		if p.SessionStatus() != SessionStatusConnecting {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	require.Equal(SessionStatusConnected, p.SessionStatus())
@@ -337,7 +340,7 @@ func TestProvider_Connect(t *testing.T) {
 	a, b := testConn(t)
 	client, _ := yamux.Client(a, yamux.DefaultConfig())
 	server, _ := yamux.Server(b, yamux.DefaultConfig())
-	go p.handleSession(client, make(chan struct{}))
+	go p.handleSession(context.Background(), client)
 
 	stream, _ := server.Open()
 	cc := msgpackrpc.NewCodec(false, false, stream)
@@ -364,6 +367,7 @@ func TestProvider_Connect(t *testing.T) {
 }
 
 func TestProvider_Disconnect(t *testing.T) {
+	const testBackoff = 300 * time.Second
 	require := require.New(t)
 	config := testProviderConfig()
 	p, err := construct(config)
@@ -379,7 +383,7 @@ func TestProvider_Disconnect(t *testing.T) {
 	a, b := testConn(t)
 	client, _ := yamux.Client(a, yamux.DefaultConfig())
 	server, _ := yamux.Server(b, yamux.DefaultConfig())
-	go p.handleSession(client, make(chan struct{}))
+	go p.handleSession(context.Background(), client)
 
 	stream, _ := server.Open()
 	cc := msgpackrpc.NewCodec(false, false, stream)
@@ -387,7 +391,7 @@ func TestProvider_Disconnect(t *testing.T) {
 	// Make the connect rpc
 	args := &types.DisconnectRequest{
 		NoRetry: true,
-		Backoff: 300 * time.Second,
+		Backoff: testBackoff,
 	}
 	resp := &types.DisconnectResponse{}
 	err = msgpackrpc.CallWithCodec(cc, "Provider.Disconnect", args, resp)
@@ -396,10 +400,12 @@ func TestProvider_Disconnect(t *testing.T) {
 	p.backoffLock.Lock()
 	defer p.backoffLock.Unlock()
 
-	require.Equal(300*time.Second, p.backoff)
+	require.Equal(testBackoff, p.backoff)
 	require.True(p.noRetry)
 
-	require.Equal(SessionStatusDisconnected, p.SessionStatus())
+	// give it some time to update state
+	time.Sleep(2 * disconnectDelay)
+	require.Equal(SessionStatusWaiting, p.SessionStatus())
 }
 
 func testConn(t *testing.T) (net.Conn, net.Conn) {

@@ -63,4 +63,8 @@ const (
 	// SessionStatusConnected is the state of the SCADA session if the
 	// session is established and active.
 	SessionStatusConnected = SessionStatus("connected")
+
+	// SessionStatusRetrying is the state of a SCADA session that was
+	// previous connected and is now in a wait-connect cycle
+	SessionStatusWaiting = SessionStatus("waiting")
 )
