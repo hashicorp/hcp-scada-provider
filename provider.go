@@ -17,7 +17,7 @@ import (
 	"github.com/hashicorp/hcp-scada-provider/internal/client/dialer/tcp"
 	"github.com/hashicorp/hcp-scada-provider/internal/listener"
 	"github.com/hashicorp/hcp-scada-provider/internal/resource"
-	"github.com/hashicorp/hcp-scada-provider/pkg/types"
+	"github.com/hashicorp/hcp-scada-provider/types"
 )
 
 const (
