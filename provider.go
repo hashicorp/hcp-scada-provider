@@ -322,7 +322,7 @@ func (p *Provider) run() context.CancelFunc {
 						// connect will error out and we go to SessionStatusWaiting
 						if client, err := p.connect(ctx); err != nil {
 							// connect closes client if any error
-							// occured at handshake() except for resp.Authenticated == true
+							// occured at handshake() except for resp.Authenticated == false
 							p.statuses <- SessionStatusWaiting
 						} else {
 							cl = client
@@ -336,7 +336,6 @@ func (p *Provider) run() context.CancelFunc {
 					p.backoffReset()
 					go func(client *client.Client) {
 						// Handle the session
-						cancel()
 						if err := p.handleSession(ctx, client); err != nil {
 							// handleSession will always close client
 							// on errors or if the ctx is canceled().
@@ -400,6 +399,9 @@ func (p *Provider) handleSession(ctx context.Context, list net.Listener) error {
 				}
 
 			case <-ctx.Done():
+				// return nil here so that g.Wait()
+				// always picks the error the Accept() routine
+				// returned.
 				return nil
 			}
 		}
