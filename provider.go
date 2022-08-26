@@ -76,6 +76,8 @@ type Provider struct {
 
 	sessionStatus SessionStatus
 	statuses      chan SessionStatus
+
+	cancel context.CancelFunc
 }
 
 // construct is used to create a new provider.
@@ -113,9 +115,7 @@ func (p *Provider) Start() error {
 	p.running = true
 
 	// Run the provider
-	go p.run()
-	// Set session status to connecting
-	p.statuses <- SessionStatusConnecting
+	p.cancel = p.run()
 
 	return nil
 }
@@ -133,8 +133,8 @@ func (p *Provider) Stop() error {
 
 	p.logger.Info("stopping")
 
-	// Set session status to disconnected
-	p.statuses <- SessionStatusDisconnected
+	// Stop the provider
+	p.cancel()
 	// Set the provider to its non-running state
 	p.running = false
 
@@ -287,78 +287,80 @@ func (p *Provider) wait(ctx context.Context) {
 }
 
 // run is a long running routine to manage the provider.
-func (p *Provider) run() {
+func (p *Provider) run() context.CancelFunc {
 	// setup a context that will
 	// cancel on stop
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
-	var cl *client.Client
-	// engage in running the provider
-	for {
-		select {
-		case status := <-p.statuses:
-			switch status {
-			case SessionStatusWaiting:
-				p.sessionStatus = SessionStatusWaiting
-				// disconnect if we ever connected
-				if cl != nil {
-					cl.Close()
-					cl = nil
+	go func() {
+		defer cancel()
+		var cl *client.Client
+		// engage in running the provider
+		for {
+			select {
+			case status := <-p.statuses:
+				switch status {
+				case SessionStatusWaiting:
+					p.sessionStatus = SessionStatusWaiting
+					// backoff
+					go func() {
+						p.wait(ctx)
+						// try to write SessionStatusConnecting
+						// or go to disconnected if we're canceled()
+						select {
+						case <-ctx.Done():
+							p.statuses <- SessionStatusDisconnected
+						case p.statuses <- SessionStatusConnecting:
+						}
+					}()
+
+				case SessionStatusConnecting:
+					p.sessionStatus = SessionStatusConnecting
+					// Try to connect a session
+					go func() {
+						// if we get canceled() during this,
+						// connect will error out and we go to SessionStatusWaiting
+						if client, err := p.connect(ctx); err != nil {
+							// connect closes client if any error
+							// occured at handshake() except for resp.Authenticated == true
+							p.statuses <- SessionStatusWaiting
+						} else {
+							cl = client
+							p.statuses <- SessionStatusConnected
+						}
+					}()
+
+				case SessionStatusConnected:
+					p.sessionStatus = SessionStatusConnected
+					// reset any longer backoff period set by the Disconnect RPC call
+					p.backoffReset()
+					go func(client *client.Client) {
+						// Handle the session
+						cancel()
+						if err := p.handleSession(ctx, client); err != nil {
+							// handleSession will always close client
+							// on errors or if the ctx is canceled().
+							// go to the waiting state
+							p.statuses <- SessionStatusWaiting
+						}
+					}(cl)
+
+				case SessionStatusDisconnected:
+					p.sessionStatus = SessionStatusDisconnected
+					// after officially disconnecting, reset the backoff period
+					p.backoffReset()
+					return
 				}
-				// backoff
-				go func() {
-					p.wait(ctx)
-					// try to write SessionStatusConnecting
-					// or return if SessionStatusDisconnected cancelled the context
-					select {
-					case <-ctx.Done():
-					case p.statuses <- SessionStatusConnecting:
-					}
-				}()
 
-			case SessionStatusConnecting:
-				p.sessionStatus = SessionStatusConnecting
-				// Try to connect a session
-				go func() {
-					// if we get SessionStatusDisconnected during this,
-					// connect will error out and we go to SessionStatusWaiting
-					if client, err := p.connect(ctx); err != nil {
-						p.statuses <- SessionStatusWaiting
-					} else {
-						cl = client
-						p.statuses <- SessionStatusConnected
-					}
-				}()
-
-			case SessionStatusConnected:
-				p.sessionStatus = SessionStatusConnected
-				// reset any longer backoff period set by the Disconnect RPC call
-				p.backoffReset()
-				go func(client *client.Client) {
-					// Handle the session
-					if err := p.handleSession(ctx, client); err != nil {
-						// in case of error, go to the waiting state
-						p.statuses <- SessionStatusWaiting
-					}
-				}(cl)
-
-			case SessionStatusDisconnected:
-				p.sessionStatus = SessionStatusDisconnected
-				if cl != nil {
-					// it's possible we never connected
-					cl.Close()
-					cl = nil
-				}
-				// after officially disconnecting, reset the backoff period
-				p.backoffReset()
-				cancel()
+			case <-ctx.Done():
+				// ¯\_(ツ)_/¯
 			}
-
-		case <-ctx.Done():
-			return
 		}
-	}
+	}()
+
+	// initialize the for loop
+	p.statuses <- SessionStatusConnecting
+	return cancel
 }
 
 // handleSession is used to handle an established session.
@@ -368,7 +370,6 @@ func (p *Provider) handleSession(ctx context.Context, list net.Listener) error {
 
 	g.Go(func() error {
 		defer close(accepted)
-		defer list.Close()
 		for {
 			if conn, err := list.Accept(); err != nil {
 				select {
@@ -386,6 +387,9 @@ func (p *Provider) handleSession(ctx context.Context, list net.Listener) error {
 	})
 
 	g.Go(func() error {
+		// make the other go routine return
+		// if ctx is canceled()
+		defer list.Close()
 		for {
 			select {
 			case conn, open := <-accepted:
