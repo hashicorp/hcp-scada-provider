@@ -293,7 +293,7 @@ func (p *Provider) run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var c *client.Client
+	var cl *client.Client
 	// engage in running the provider
 	for {
 		select {
@@ -302,9 +302,9 @@ func (p *Provider) run() {
 			case SessionStatusWaiting:
 				p.sessionStatus = SessionStatusWaiting
 				// disconnect if we ever connected
-				if c != nil {
-					c.Close()
-					c = nil
+				if cl != nil {
+					cl.Close()
+					cl = nil
 				}
 				// backoff
 				go func() {
@@ -323,10 +323,10 @@ func (p *Provider) run() {
 				go func() {
 					// if we get SessionStatusDisconnected during this,
 					// connect will error out and we go to SessionStatusWaiting
-					if cc, err := p.connect(ctx); err != nil {
+					if client, err := p.connect(ctx); err != nil {
 						p.statuses <- SessionStatusWaiting
 					} else {
-						c = cc
+						cl = client
 						p.statuses <- SessionStatusConnected
 					}
 				}()
@@ -341,14 +341,14 @@ func (p *Provider) run() {
 						// in case of error, go to the waiting state
 						p.statuses <- SessionStatusWaiting
 					}
-				}(c)
+				}(cl)
 
 			case SessionStatusDisconnected:
 				p.sessionStatus = SessionStatusDisconnected
-				if c != nil {
+				if cl != nil {
 					// it's possible we never connected
-					c.Close()
-					c = nil
+					cl.Close()
+					cl = nil
 				}
 				// after officially disconnecting, reset the backoff period
 				p.backoffReset()
@@ -457,17 +457,11 @@ func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 	}
 
 	// Perform a handshake
-	resp, err := p.handshake(client)
+	_, err = p.handshake(client)
 	if err != nil {
 		p.logger.Error("handshake failed", "error", err)
 		client.Close()
 		return nil, err
-	}
-	if resp != nil && resp.SessionID != "" {
-		p.logger.Debug("assigned session ID", "id", resp.SessionID)
-	}
-	if resp != nil && !resp.Authenticated {
-		p.logger.Warn("authentication failed", "reason", resp.Reason)
 	}
 
 	return client, nil
@@ -504,6 +498,14 @@ func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, e
 	if err := client.RPC("Session.Handshake", &req, resp); err != nil {
 		return nil, err
 	}
+
+	if resp != nil && resp.SessionID != "" {
+		p.logger.Debug("assigned session ID", "id", resp.SessionID)
+	}
+	if resp != nil && !resp.Authenticated {
+		p.logger.Warn("authentication failed", "reason", resp.Reason)
+	}
+
 	return resp, nil
 }
 
