@@ -87,12 +87,11 @@ func construct(config *Config) (*Provider, error) {
 	}
 
 	p := &Provider{
-		config:        config,
-		logger:        config.Logger.Named("scada-provider"),
-		meta:          map[string]string{},
-		handlers:      map[string]handler{},
-		sessionStatus: SessionStatusDisconnected,
-		statuses:      make(chan SessionStatus),
+		config:   config,
+		logger:   config.Logger.Named("scada-provider"),
+		meta:     map[string]string{},
+		handlers: map[string]handler{},
+		statuses: make(chan SessionStatus),
 	}
 
 	return p, nil

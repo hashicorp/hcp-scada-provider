@@ -45,12 +45,12 @@ type SCADAProvider interface {
 }
 
 // SessionStatus is used to express the current status of the SCADA session.
-type SessionStatus = string
+type SessionStatus = int
 
 const (
 	// SessionStatusDisconnected is the state of the SCADA session if the
 	// provider has not been started or has been stopped.
-	SessionStatusDisconnected = SessionStatus("disconnected")
+	SessionStatusDisconnected = iota
 
 	// SessionStatusConnecting is the initial state of the SCADA connection
 	// as well as the state it will be in if the connection got disrupted and
@@ -58,13 +58,13 @@ const (
 	//
 	// The connection will transition to connected once the SCADA session is
 	// established.
-	SessionStatusConnecting = SessionStatus("connecting")
+	SessionStatusConnecting
 
 	// SessionStatusConnected is the state of the SCADA session if the
 	// session is established and active.
-	SessionStatusConnected = SessionStatus("connected")
+	SessionStatusConnected
 
 	// SessionStatusRetrying is the state of a SCADA session that was
 	// previous connected and is now in a wait-connect cycle
-	SessionStatusWaiting = SessionStatus("waiting")
+	SessionStatusWaiting
 )
