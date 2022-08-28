@@ -32,6 +32,14 @@ const (
 	disconnectDelay = time.Second
 )
 
+type action int
+
+const (
+	actionDefault = iota
+	actionRehandshake
+	actionDisconnect
+)
+
 type handler struct {
 	provider listener.Provider
 	listener net.Listener
@@ -77,6 +85,8 @@ type Provider struct {
 	sessionStatus SessionStatus
 	statuses      chan SessionStatus
 
+	actions chan action
+
 	cancel context.CancelFunc
 }
 
@@ -93,6 +103,7 @@ func construct(config *Config) (*Provider, error) {
 		handlers:      map[string]handler{},
 		sessionStatus: SessionStatusDisconnected,
 		statuses:      make(chan SessionStatus),
+		actions:       make(chan action),
 	}
 
 	return p, nil
@@ -323,6 +334,7 @@ func (p *Provider) run() context.CancelFunc {
 						if client, err := p.connect(ctx); err != nil {
 							// connect closes client if any error
 							// occured at handshake() except for resp.Authenticated == false
+							cl = nil
 							p.statuses <- SessionStatusWaiting
 						} else {
 							cl = client
@@ -340,6 +352,7 @@ func (p *Provider) run() context.CancelFunc {
 							// handleSession will always close client
 							// on errors or if the ctx is canceled().
 							// go to the waiting state
+							cl = nil
 							p.statuses <- SessionStatusWaiting
 						}
 					}(cl)
@@ -349,6 +362,33 @@ func (p *Provider) run() context.CancelFunc {
 					// after officially disconnecting, reset the backoff period
 					p.backoffReset()
 					return
+				}
+
+			case action := <-p.actions:
+				switch action {
+				case actionDisconnect:
+					// this will get reset toSessionStatusWaiting very shortly.
+					p.sessionStatus = SessionStatusDisconnected
+					// this is a disconnect signal
+					// received via RPC, we are certain to be
+					// connected. During testing we are using mocks
+					// and the client will never have been created.
+					if cl != nil {
+						cl.Close()
+					}
+					// switch to SessionStatusWaiting
+					go func() {
+						p.statuses <- SessionStatusWaiting
+					}()
+
+				case actionRehandshake:
+					// handshake will close cl on errors
+					if _, err := p.handshake(ctx, cl); err != nil {
+						// switch to SessionStatusWaiting
+						go func() {
+							p.statuses <- SessionStatusWaiting
+						}()
+					}
 				}
 
 			case <-ctx.Done():
@@ -463,10 +503,9 @@ func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 	}
 
 	// Perform a handshake
-	_, err = p.handshake(client)
+	_, err = p.handshake(ctx, client)
 	if err != nil {
 		p.logger.Error("handshake failed", "error", err)
-		client.Close()
 		return nil, err
 	}
 
@@ -474,7 +513,7 @@ func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 }
 
 // handshake does the initial handshake.
-func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, error) {
+func (p *Provider) handshake(ctx context.Context, client *client.Client) (*types.HandshakeResponse, error) {
 	// Build the set of capabilities based on the registered handlers.
 	p.handlersLock.RLock()
 	capabilities := make(map[string]int, len(p.handlers))
@@ -485,6 +524,7 @@ func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, e
 
 	oauthToken, err := p.config.HCPConfig.Token()
 	if err != nil {
+		client.Close()
 		return nil, fmt.Errorf("failed to get access token: %w", err)
 	}
 
@@ -502,6 +542,7 @@ func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, e
 	}
 	resp := new(types.HandshakeResponse)
 	if err := client.RPC("Session.Handshake", &req, resp); err != nil {
+		client.Close()
 		return nil, err
 	}
 
@@ -594,7 +635,8 @@ func (pe *providerEndpoint) Disconnect(args *types.DisconnectRequest, resp *type
 
 	// Force the disconnect
 	time.AfterFunc(disconnectDelay, func() {
-		pe.p.statuses <- SessionStatusWaiting
+		//pe.p.statuses <- SessionStatusWaiting
+		pe.p.actions <- actionDisconnect
 	})
 	return nil
 }
