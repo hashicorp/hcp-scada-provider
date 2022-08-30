@@ -2,6 +2,7 @@ package scada
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -38,6 +39,10 @@ const (
 	actionDefault = iota
 	actionRehandshake
 	actionDisconnect
+)
+
+var (
+	errNoRetry = errors.New("client is configured to not retry a connection")
 )
 
 type handler struct {
@@ -124,7 +129,6 @@ func (p *Provider) Start() error {
 
 	// Set the provider to its running state
 	p.running = true
-
 	// Run the provider
 	p.cancel = p.run()
 
@@ -255,32 +259,39 @@ func (p *Provider) backoffReset() {
 }
 
 // backoffDuration is used to compute the next backoff duration.
-func (p *Provider) backoffDuration() time.Duration {
+// it returns the backoff time to wait for and a bool that will be
+// set to true if no retries should be attempted.
+func (p *Provider) backoffDuration() (time.Duration, bool) {
 	// Use the default backoff
 	backoff := defaultBackoff
 
 	// Check for a server specified backoff
 	p.backoffLock.Lock()
+	defer p.backoffLock.Unlock()
 	if p.backoff != 0 {
 		backoff = p.backoff
 	}
 	if p.noRetry {
 		backoff = 0
 	}
-	p.backoffLock.Unlock()
 
 	// Use the test backoff
 	if p.config.TestBackoff != 0 {
 		backoff = p.config.TestBackoff
 	}
 
-	return backoff
+	return backoff, p.noRetry
 }
 
 // wait is used to delay dialing on an error.
-func (p *Provider) wait(ctx context.Context) {
+// it will return an error if the provider context is canceled.
+func (p *Provider) wait(ctx context.Context) error {
 	// Compute the backoff time
-	backoff := p.backoffDuration()
+	backoff, noRetry := p.backoffDuration()
+	// is this a no retry situation?
+	if noRetry {
+		return errNoRetry
+	}
 
 	// Setup a wait timer
 	var wait <-chan time.Time
@@ -293,7 +304,9 @@ func (p *Provider) wait(ctx context.Context) {
 	// Wait until timer or shutdown
 	select {
 	case <-wait:
+		return nil
 	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -315,13 +328,12 @@ func (p *Provider) run() context.CancelFunc {
 					p.sessionStatus = SessionStatusWaiting
 					// backoff
 					go func() {
-						p.wait(ctx)
-						// try to write SessionStatusConnecting
-						// or go to disconnected if we're canceled()
-						select {
-						case <-ctx.Done():
+						if err := p.wait(ctx); err != nil {
+							// wait returns an errors if we shouldn't retry
+							// or if ctx is canceled()
 							p.statuses <- SessionStatusDisconnected
-						case p.statuses <- SessionStatusConnecting:
+						} else {
+							p.statuses <- SessionStatusConnecting
 						}
 					}()
 
@@ -391,7 +403,6 @@ func (p *Provider) run() context.CancelFunc {
 					}
 				}
 
-			case <-ctx.Done():
 				// ¯\_(ツ)_/¯
 			}
 		}
@@ -403,14 +414,17 @@ func (p *Provider) run() context.CancelFunc {
 }
 
 // handleSession is used to handle an established session.
-func (p *Provider) handleSession(ctx context.Context, list net.Listener) error {
-	var accepted = make(chan net.Conn)
+func (p *Provider) handleSession(ctx context.Context, yamux net.Listener) error {
+	var done = make(chan bool)
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		defer close(accepted)
+		// make the other go routine return
+		// if yamux.Accept() errors out
+		defer close(done)
+		defer yamux.Close()
 		for {
-			if conn, err := list.Accept(); err != nil {
+			if conn, err := yamux.Accept(); err != nil {
 				select {
 				case <-ctx.Done():
 					// Do not log an error if we are shutting down
@@ -420,28 +434,26 @@ func (p *Provider) handleSession(ctx context.Context, list net.Listener) error {
 				return err
 			} else {
 				p.logger.Debug("accepted connection")
-				accepted <- conn
+				go p.handleConnection(ctx, conn)
 			}
 		}
 	})
 
 	g.Go(func() error {
-		// make the other go routine return
-		// if ctx is canceled()
-		defer list.Close()
+		// return nil here so that g.Wait()
+		// always picks the error the Accept() routine
+		// returned.
 		for {
 			select {
-			case conn, open := <-accepted:
-				if open {
-					go p.handleConnection(ctx, conn)
-				} else {
-					return nil
-				}
+			case <-done:
+				// the other go routine returned with an error
+				// and closed the yamux client
+				return nil
 
 			case <-ctx.Done():
-				// return nil here so that g.Wait()
-				// always picks the error the Accept() routine
-				// returned.
+				// make the other go routine return
+				// if ctx is canceled()
+				yamux.Close()
 				return nil
 			}
 		}
