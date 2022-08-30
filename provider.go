@@ -351,7 +351,6 @@ func (p *Provider) run() context.CancelFunc {
 					return
 				}
 
-			case <-ctx.Done():
 				// ¯\_(ツ)_/¯
 			}
 		}
