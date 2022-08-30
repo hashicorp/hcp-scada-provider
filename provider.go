@@ -362,14 +362,17 @@ func (p *Provider) run() context.CancelFunc {
 }
 
 // handleSession is used to handle an established session.
-func (p *Provider) handleSession(ctx context.Context, list net.Listener) error {
-	var accepted = make(chan net.Conn)
+func (p *Provider) handleSession(ctx context.Context, yamux net.Listener) error {
+	var done = make(chan bool)
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		defer close(accepted)
+		// make the other go routine return
+		// if yamux.Accept() errors out
+		defer close(done)
+		defer yamux.Close()
 		for {
-			if conn, err := list.Accept(); err != nil {
+			if conn, err := yamux.Accept(); err != nil {
 				select {
 				case <-ctx.Done():
 					// Do not log an error if we are shutting down
@@ -379,28 +382,26 @@ func (p *Provider) handleSession(ctx context.Context, list net.Listener) error {
 				return err
 			} else {
 				p.logger.Debug("accepted connection")
-				accepted <- conn
+				go p.handleConnection(ctx, conn)
 			}
 		}
 	})
 
 	g.Go(func() error {
-		// make the other go routine return
-		// if ctx is canceled()
-		defer list.Close()
+		// return nil here so that g.Wait()
+		// always picks the error the Accept() routine
+		// returned.
 		for {
 			select {
-			case conn, open := <-accepted:
-				if open {
-					go p.handleConnection(ctx, conn)
-				} else {
-					return nil
-				}
+			case <-done:
+				// the other go routune returned with an error
+				// and closed the yamux client
+				return nil
 
 			case <-ctx.Done():
-				// return nil here so that g.Wait()
-				// always picks the error the Accept() routine
-				// returned.
+				// make the other go routine return
+				// if ctx is canceled()
+				yamux.Close()
 				return nil
 			}
 		}
