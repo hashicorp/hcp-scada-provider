@@ -176,19 +176,22 @@ func TestProvider_backoff(t *testing.T) {
 		_ = p.Stop()
 	}(p)
 
-	require.EqualValues(p.backoffDuration(), defaultBackoff)
+	backoffDuration, noRetry := p.backoffDuration()
+	require.EqualValues(backoffDuration, defaultBackoff)
 
 	// Set a new minimum
 	p.backoffLock.Lock()
 	p.backoff = 60 * time.Second
 	p.backoffLock.Unlock()
-	require.EqualValues(p.backoffDuration(), 60*time.Second)
+	backoffDuration, noRetry = p.backoffDuration()
+	require.EqualValues(backoffDuration, 60*time.Second)
 
 	// Set no retry
 	p.backoffLock.Lock()
 	p.noRetry = true
 	p.backoffLock.Unlock()
-	require.EqualValues(p.backoffDuration(), 0)
+	backoffDuration, noRetry = p.backoffDuration()
+	require.EqualValues(noRetry, true)
 }
 
 func testListener(t *testing.T) (string, net.Listener) {
