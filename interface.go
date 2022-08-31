@@ -6,13 +6,9 @@ import (
 
 // SCADAProvider allows to expose services via SCADA capabilities.
 type SCADAProvider interface {
-	// SetMetaValue sets the meta-data value. Empty values will not be
-	// transmitted to the broker.
-	//
-	// In the future new meta-data value will be transmitted with the
-	// next handshake. For now new meta-data can only be set when
-	// the provider is stopped.
-	SetMetaValue(key, value string)
+	// UpdateMeta updates the internal map of meta-data values
+	// and performs a rehandshake to update the broker with the new values.
+	UpdateMeta(map[string]string)
 
 	// GetMeta returns the provider's current meta-data.
 	GetMeta() map[string]string
@@ -23,9 +19,7 @@ type SCADAProvider interface {
 	//
 	// The method will return an existing listener if the capability already existed.
 	// Listeners can be retrieved even when the provider is stopped (e.g. before it is
-	// started). For now new capabilities can only be added while the provider is stopped
-	// (once re-handshakes are available new capabilities can be added regardless of the
-	// state of the provider).
+	// started). New capabilities and new-meta data can be added at any time.
 	//
 	// The listener will only be closed, if it is closed explicitly by calling Close().
 	// The listener will not be closed due to errors or when the provider is stopped.
