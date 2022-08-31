@@ -1,4 +1,4 @@
-package scada
+package provider
 
 import (
 	"net"

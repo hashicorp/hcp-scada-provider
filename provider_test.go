@@ -1,4 +1,4 @@
-package scada
+package provider
 
 import (
 	"context"
@@ -14,10 +14,10 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hashicorp/hcp-scada-provider/api/types"
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
 	"github.com/hashicorp/hcp-scada-provider/internal/listener"
 	"github.com/hashicorp/hcp-scada-provider/internal/test"
+	"github.com/hashicorp/hcp-scada-provider/types"
 )
 
 const (
@@ -349,13 +349,13 @@ func TestProvider_Connect(t *testing.T) {
 	cc := msgpackrpc.NewCodec(false, false, stream)
 
 	// Make the connect rpc
-	args := &types.ConnectRequest{
+	args := &ConnectRequest{
 		Capability: "foo",
 		Meta: map[string]string{
 			"zip": "zap",
 		},
 	}
-	resp := &types.ConnectResponse{}
+	resp := &ConnectResponse{}
 	err = msgpackrpc.CallWithCodec(cc, "Provider.Connect", args, resp)
 	require.NoError(err)
 
@@ -392,11 +392,11 @@ func TestProvider_Disconnect(t *testing.T) {
 	cc := msgpackrpc.NewCodec(false, false, stream)
 
 	// Make the connect rpc
-	args := &types.DisconnectRequest{
+	args := &DisconnectRequest{
 		NoRetry: true,
 		Backoff: testBackoff,
 	}
-	resp := &types.DisconnectResponse{}
+	resp := &DisconnectResponse{}
 	err = msgpackrpc.CallWithCodec(cc, "Provider.Disconnect", args, resp)
 	require.NoError(err)
 

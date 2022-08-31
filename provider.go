@@ -1,4 +1,4 @@
-package scada
+package provider
 
 import (
 	"context"
@@ -16,11 +16,11 @@ import (
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/hashicorp/hcp-scada-provider/api/types"
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
 	"github.com/hashicorp/hcp-scada-provider/internal/client/dialer/tcp"
 	"github.com/hashicorp/hcp-scada-provider/internal/listener"
 	"github.com/hashicorp/hcp-scada-provider/internal/resource"
+	"github.com/hashicorp/hcp-scada-provider/types"
 )
 
 const (
@@ -301,6 +301,7 @@ func (p *Provider) wait(ctx context.Context) error {
 // run is a long running routine to manage the provider.
 func (p *Provider) run() context.CancelFunc {
 	var statuses = make(chan SessionStatus)
+
 	// setup a context that will
 	// cancel on stop
 	ctx, cancel := context.WithCancel(context.Background())
@@ -582,7 +583,7 @@ func (pe *providerEndpoint) setHijack(cb hijackFunc) {
 }
 
 // Connect is invoked by the broker to connect to a capability.
-func (pe *providerEndpoint) Connect(args *types.ConnectRequest, resp *types.ConnectResponse) error {
+func (pe *providerEndpoint) Connect(args *ConnectRequest, resp *ConnectResponse) error {
 	pe.p.logger.Info("connect requested", "capability", args.Capability)
 
 	// Handle potential flash
@@ -619,7 +620,7 @@ func (pe *providerEndpoint) Connect(args *types.ConnectRequest, resp *types.Conn
 }
 
 // Disconnect is invoked by the broker to ask us to backoff.
-func (pe *providerEndpoint) Disconnect(args *types.DisconnectRequest, resp *types.DisconnectResponse) error {
+func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *DisconnectResponse) error {
 	if args.Reason == "" {
 		args.Reason = "<no reason provided>"
 	}
