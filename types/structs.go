@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	"github.com/hashicorp/hcp-sdk-go/clients/cloud-shared/v1/models"
 )
 
@@ -38,4 +40,5 @@ type HandshakeResponse struct {
 	Authenticated bool
 	SessionID     string
 	Reason        string
+	Refresh       time.Duration // the recommended refresh interval before the next re-handshake
 }
