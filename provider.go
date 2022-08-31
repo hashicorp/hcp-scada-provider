@@ -34,7 +34,8 @@ const (
 )
 
 var (
-	errNoRetry = errors.New("client is configured to not retry a connection")
+	errNoRetry    = errors.New("provider is configured to not retry a connection")
+	errNotRunning = errors.New("provider is not running")
 )
 
 type handler struct {
@@ -80,7 +81,8 @@ type Provider struct {
 	runningLock sync.Mutex
 
 	sessionStatus SessionStatus
-	statuses      chan SessionStatus
+
+	actions chan action
 
 	cancel context.CancelFunc
 }
@@ -97,7 +99,7 @@ func construct(config *Config) (*Provider, error) {
 		meta:          map[string]string{},
 		handlers:      map[string]handler{},
 		sessionStatus: SessionStatusDisconnected,
-		statuses:      make(chan SessionStatus),
+		actions:       make(chan action),
 	}
 
 	return p, nil
@@ -155,10 +157,7 @@ func (p *Provider) isStopped() bool {
 // SetMetaValue sets the meta-data value. Empty values will not be
 // transmitted to the broker.
 //
-// New meta-data can only be set when
-// the provider is stopped.
-//
-// TODO: *update this when re-handshake is completed*
+// New meta data can be added at any time.
 func (p *Provider) SetMetaValue(key, value string) {
 	p.metaLock.Lock()
 	defer p.metaLock.Unlock()
@@ -166,17 +165,15 @@ func (p *Provider) SetMetaValue(key, value string) {
 	// Remove the value if it is empty
 	if value == "" {
 		delete(p.meta, key)
-		return
+	} else {
+		p.meta[key] = value
 	}
-
-	p.meta[key] = value
+	// tell the run loop to re-handshake and update the broker
+	p.action(actionRehandshake)
 }
 
 // GetMeta returns the provider's current meta-data.
 func (p *Provider) GetMeta() map[string]string {
-	p.metaLock.RLock()
-	defer p.metaLock.RUnlock()
-
 	return p.meta
 }
 
@@ -186,9 +183,7 @@ func (p *Provider) GetMeta() map[string]string {
 //
 // The method will return an existing listener if the capability already existed.
 // Listeners can be retrieved even when the provider is stopped (e.g. before it is
-// started). New capabilities can only be added while the provider is stopped.
-//
-// TODO: *update this when re-handshake is completed*
+// started). New capabilities and new meta data can be added at any time.
 //
 // The listener will only be closed, if it is closed explicitly by calling Close().
 // The listener will not be closed due to errors or when the provider is stopped.
@@ -230,6 +225,9 @@ func (p *Provider) Listen(capability string) (net.Listener, error) {
 		provider: capProvider,
 		listener: capListenerProxy,
 	}
+
+	// re-handshake to update the broker
+	p.action(actionRehandshake)
 
 	return capListenerProxy, nil
 }
@@ -273,7 +271,8 @@ func (p *Provider) backoffDuration() (time.Duration, bool) {
 }
 
 // wait is used to delay dialing on an error.
-// it will return an error if the provider context is canceled.
+// it will return an error if the connection should not be
+// retried.
 func (p *Provider) wait(ctx context.Context) error {
 	// Compute the backoff time
 	backoff, noRetry := p.backoffDuration()
@@ -301,6 +300,8 @@ func (p *Provider) wait(ctx context.Context) error {
 
 // run is a long running routine to manage the provider.
 func (p *Provider) run() context.CancelFunc {
+	var statuses = make(chan SessionStatus)
+
 	// setup a context that will
 	// cancel on stop
 	ctx, cancel := context.WithCancel(context.Background())
@@ -311,7 +312,7 @@ func (p *Provider) run() context.CancelFunc {
 		// engage in running the provider
 		for {
 			select {
-			case status := <-p.statuses:
+			case status := <-statuses:
 				switch status {
 				case SessionStatusWaiting:
 					p.sessionStatus = SessionStatusWaiting
@@ -320,9 +321,9 @@ func (p *Provider) run() context.CancelFunc {
 						if err := p.wait(ctx); err != nil {
 							// wait returns an errors if we shouldn't retry
 							// or if ctx is canceled()
-							p.statuses <- SessionStatusDisconnected
+							statuses <- SessionStatusDisconnected
 						} else {
-							p.statuses <- SessionStatusConnecting
+							statuses <- SessionStatusConnecting
 						}
 					}()
 
@@ -335,10 +336,10 @@ func (p *Provider) run() context.CancelFunc {
 						if client, err := p.connect(ctx); err != nil {
 							// connect closes client if any error
 							// occured at handshake() except for resp.Authenticated == false
-							p.statuses <- SessionStatusWaiting
+							statuses <- SessionStatusWaiting
 						} else {
 							cl = client
-							p.statuses <- SessionStatusConnected
+							statuses <- SessionStatusConnected
 						}
 					}()
 
@@ -352,7 +353,7 @@ func (p *Provider) run() context.CancelFunc {
 							// handleSession will always close client
 							// on errors or if the ctx is canceled().
 							// go to the waiting state
-							p.statuses <- SessionStatusWaiting
+							statuses <- SessionStatusWaiting
 						}
 					}(cl)
 
@@ -363,13 +364,40 @@ func (p *Provider) run() context.CancelFunc {
 					return
 				}
 
+			case action := <-p.actions:
+				// these actions always close `cl` if they error out, and this affects the state engine in the following ways:
+				// * connect will return with an error and continue to the next state
+				// * handleSession will return with an error and continue to the next state
+				switch action {
+				case actionDisconnect:
+					// this is a disconnect signal
+					// received via RPC, we are certain to be
+					// connected. During testing we are using mocks
+					// and the client will never have been created.
+					if p.sessionStatus != SessionStatusConnected {
+						continue
+					}
+
+					if cl != nil {
+						cl.Close()
+					}
+
+				case actionRehandshake:
+					if p.sessionStatus != SessionStatusConnected {
+						continue
+					}
+					// handshake will close cl on errors
+					if _, err := p.handshake(ctx, cl); err != nil {
+					}
+				}
+
 				// ¯\_(ツ)_/¯
 			}
 		}
 	}()
 
 	// initialize the for loop
-	p.statuses <- SessionStatusConnecting
+	statuses <- SessionStatusConnecting
 	return cancel
 }
 
@@ -475,10 +503,9 @@ func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 	}
 
 	// Perform a handshake
-	_, err = p.handshake(client)
+	_, err = p.handshake(ctx, client)
 	if err != nil {
 		p.logger.Error("handshake failed", "error", err)
-		client.Close()
 		return nil, err
 	}
 
@@ -486,7 +513,7 @@ func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 }
 
 // handshake does the initial handshake.
-func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, error) {
+func (p *Provider) handshake(ctx context.Context, client *client.Client) (*types.HandshakeResponse, error) {
 	// Build the set of capabilities based on the registered handlers.
 	p.handlersLock.RLock()
 	capabilities := make(map[string]int, len(p.handlers))
@@ -497,8 +524,14 @@ func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, e
 
 	oauthToken, err := p.config.HCPConfig.Token()
 	if err != nil {
+		client.Close()
 		return nil, fmt.Errorf("failed to get access token: %w", err)
 	}
+
+	// make sure nobody is writing to the
+	// meta map while client.RPC is reading from it
+	p.metaLock.RLock()
+	defer p.metaLock.RUnlock()
 
 	req := types.HandshakeRequest{
 		Service:  p.config.Service,
@@ -514,6 +547,7 @@ func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, e
 	}
 	resp := new(types.HandshakeResponse)
 	if err := client.RPC("Session.Handshake", &req, resp); err != nil {
+		client.Close()
 		return nil, err
 	}
 
@@ -606,7 +640,7 @@ func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *Disconnect
 
 	// Force the disconnect
 	time.AfterFunc(disconnectDelay, func() {
-		pe.p.statuses <- SessionStatusWaiting
+		pe.p.action(actionDisconnect)
 	})
 	return nil
 }
