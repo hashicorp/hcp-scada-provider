@@ -365,6 +365,9 @@ func (p *Provider) run() context.CancelFunc {
 				}
 
 			case action := <-p.actions:
+				// these actions always close `cl` if they error out, and this affects the state engine in the following ways:
+				// * connect will return with an error and continue to the next state
+				// * handleSession will return with an error and continue to the next state
 				switch action {
 				case actionDisconnect:
 					// this is a disconnect signal
