@@ -1,6 +1,9 @@
 package dialer
 
-import "net"
+import (
+	"context"
+	"net"
+)
 
 // Dialer is the interface for dialing a SCADA broker.
 type Dialer interface {
@@ -8,6 +11,8 @@ type Dialer interface {
 	// net.Conn that is the connection to SCADA or an error if it couldn't be
 	// dialed.
 	Dial(string) (net.Conn, error)
+	// DialContext has the same functionality Dial has but operates with a context.
+	DialContext(context.Context, string) (net.Conn, error)
 }
 
 // TransientError marks dial errors created from scada dialers as being

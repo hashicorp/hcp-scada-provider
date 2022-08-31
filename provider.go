@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
 	"github.com/hashicorp/hcp-scada-provider/internal/client/dialer/tcp"
@@ -28,6 +31,10 @@ const (
 	// disconnectDelay is the amount of time to wait between the moment
 	// the disconnect RPC call is received and actually disconnecting the provider.
 	disconnectDelay = time.Second
+)
+
+var (
+	errNoRetry = errors.New("client is configured to not retry a connection")
 )
 
 type handler struct {
@@ -59,9 +66,6 @@ type Provider struct {
 	config *Config
 	logger hclog.Logger
 
-	client     *client.Client
-	clientLock sync.Mutex
-
 	handlers     map[string]handler
 	handlersLock sync.RWMutex
 
@@ -69,15 +73,16 @@ type Provider struct {
 	backoff     time.Duration // set when the server provides a longer backoff
 	backoffLock sync.Mutex
 
-	sessionStatus SessionStatus
-	sessionLock   sync.RWMutex
-
 	meta     map[string]string
 	metaLock sync.RWMutex
 
 	running     bool
-	stopCh      chan struct{}
 	runningLock sync.Mutex
+
+	sessionStatus SessionStatus
+	statuses      chan SessionStatus
+
+	cancel context.CancelFunc
 }
 
 // construct is used to create a new provider.
@@ -86,18 +91,13 @@ func construct(config *Config) (*Provider, error) {
 		return nil, err
 	}
 
-	// Create a closed channel to use for stopCh, as the provider is initially
-	// stopped.
-	closedCh := make(chan struct{})
-	close(closedCh)
-
 	p := &Provider{
 		config:        config,
 		logger:        config.Logger.Named("scada-provider"),
 		meta:          map[string]string{},
 		handlers:      map[string]handler{},
 		sessionStatus: SessionStatusDisconnected,
-		stopCh:        closedCh,
+		statuses:      make(chan SessionStatus),
 	}
 
 	return p, nil
@@ -114,20 +114,17 @@ func (p *Provider) Start() error {
 		return nil
 	}
 
-	// Set session status to connecting
-	p.setSessionStatus(SessionStatusConnecting)
+	p.logger.Info("starting")
 
 	// Set the provider to its running state
-	p.stopCh = make(chan struct{})
 	p.running = true
-
 	// Run the provider
-	go p.run()
+	p.cancel = p.run()
 
 	return nil
 }
 
-// Stop will try to gracefully close the currently active SCADA session. This will
+// Stop will gracefully close the currently active SCADA session. This will
 // not close the capability listeners.
 func (p *Provider) Stop() error {
 	p.runningLock.Lock()
@@ -139,23 +136,20 @@ func (p *Provider) Stop() error {
 	}
 
 	p.logger.Info("stopping")
+
+	// Stop the provider
+	p.cancel()
+	// Set the provider to its non-running state
 	p.running = false
 
-	p.setSessionStatus(SessionStatusDisconnected)
-
-	close(p.stopCh)
 	return nil
 }
 
 // isStopped checks if the provider has been stopped.
-// TODO: replace with SessionStatus
 func (p *Provider) isStopped() bool {
-	select {
-	case <-p.stopCh:
-		return true
-	default:
-		return false
-	}
+	p.runningLock.Lock()
+	defer p.runningLock.Unlock()
+	return !p.running
 }
 
 // SetMetaValue sets the meta-data value. Empty values will not be
@@ -242,111 +236,194 @@ func (p *Provider) Listen(capability string) (net.Listener, error) {
 
 // SessionStatus returns the status of the SCADA connection.
 func (p *Provider) SessionStatus() SessionStatus {
-	p.sessionLock.RLock()
-	defer p.sessionLock.RUnlock()
-
 	return p.sessionStatus
 }
 
-func (p *Provider) setSessionStatus(state SessionStatus) {
-	p.sessionLock.Lock()
-	defer p.sessionLock.Unlock()
-
-	p.sessionStatus = state
+func (p *Provider) backoffReset() {
+	// Reset the previous backoff
+	p.backoffLock.Lock()
+	p.noRetry = false
+	p.backoff = 0
+	p.backoffLock.Unlock()
 }
 
 // backoffDuration is used to compute the next backoff duration.
-func (p *Provider) backoffDuration() time.Duration {
+// it returns the backoff time to wait for and a bool that will be
+// set to true if no retries should be attempted.
+func (p *Provider) backoffDuration() (time.Duration, bool) {
 	// Use the default backoff
 	backoff := defaultBackoff
 
 	// Check for a server specified backoff
 	p.backoffLock.Lock()
+	defer p.backoffLock.Unlock()
 	if p.backoff != 0 {
 		backoff = p.backoff
 	}
 	if p.noRetry {
 		backoff = 0
 	}
-	p.backoffLock.Unlock()
 
 	// Use the test backoff
 	if p.config.TestBackoff != 0 {
 		backoff = p.config.TestBackoff
 	}
 
-	return backoff
+	return backoff, p.noRetry
 }
 
 // wait is used to delay dialing on an error.
-func (p *Provider) wait() {
+// it will return an error if the provider context is canceled.
+func (p *Provider) wait(ctx context.Context) error {
 	// Compute the backoff time
-	backoff := p.backoffDuration()
+	backoff, noRetry := p.backoffDuration()
+	// is this a no retry situation?
+	if noRetry {
+		return errNoRetry
+	}
 
 	// Setup a wait timer
 	var wait <-chan time.Time
 	if backoff > 0 {
-		jitter := time.Duration(rand.Uint32()) % backoff
-		wait = time.After(backoff + jitter)
+		backoff = backoff + time.Duration(rand.Uint32())%backoff
+		p.logger.Debug("backing off", "seconds", backoff.Seconds())
+		wait = time.After(backoff)
 	}
 
 	// Wait until timer or shutdown
 	select {
 	case <-wait:
-	case <-p.stopCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
 // run is a long running routine to manage the provider.
-func (p *Provider) run() {
-	for !p.isStopped() {
-		// Setup a new connection
-		client, err := p.clientSetup()
-		if err != nil {
-			// on error change the session state to connecting
-			p.setSessionStatus(SessionStatusConnecting)
-			p.wait()
-			continue
-		}
+func (p *Provider) run() context.CancelFunc {
+	// setup a context that will
+	// cancel on stop
+	ctx, cancel := context.WithCancel(context.Background())
 
-		// Handle the session
-		doneCh := make(chan struct{})
-		go p.handleSession(client, doneCh)
+	go func() {
+		defer cancel()
+		var cl *client.Client
+		// engage in running the provider
+		for {
+			select {
+			case status := <-p.statuses:
+				switch status {
+				case SessionStatusWaiting:
+					p.sessionStatus = SessionStatusWaiting
+					// backoff
+					go func() {
+						if err := p.wait(ctx); err != nil {
+							// wait returns an errors if we shouldn't retry
+							// or if ctx is canceled()
+							p.statuses <- SessionStatusDisconnected
+						} else {
+							p.statuses <- SessionStatusConnecting
+						}
+					}()
 
-		// Wait for session termination or shutdown
-		select {
-		case <-doneCh:
-			p.wait()
-		case <-p.stopCh:
-			p.clientLock.Lock()
-			client.Close()
-			p.clientLock.Unlock()
-			return
+				case SessionStatusConnecting:
+					p.sessionStatus = SessionStatusConnecting
+					// Try to connect a session
+					go func() {
+						// if we get canceled() during this,
+						// connect will error out and we go to SessionStatusWaiting
+						if client, err := p.connect(ctx); err != nil {
+							// connect closes client if any error
+							// occured at handshake() except for resp.Authenticated == false
+							p.statuses <- SessionStatusWaiting
+						} else {
+							cl = client
+							p.statuses <- SessionStatusConnected
+						}
+					}()
+
+				case SessionStatusConnected:
+					p.sessionStatus = SessionStatusConnected
+					// reset any longer backoff period set by the Disconnect RPC call
+					p.backoffReset()
+					go func(client *client.Client) {
+						// Handle the session
+						if err := p.handleSession(ctx, client); err != nil {
+							// handleSession will always close client
+							// on errors or if the ctx is canceled().
+							// go to the waiting state
+							p.statuses <- SessionStatusWaiting
+						}
+					}(cl)
+
+				case SessionStatusDisconnected:
+					p.sessionStatus = SessionStatusDisconnected
+					// after officially disconnecting, reset the backoff period
+					p.backoffReset()
+					return
+				}
+
+				// ¯\_(ツ)_/¯
+			}
 		}
-	}
+	}()
+
+	// initialize the for loop
+	p.statuses <- SessionStatusConnecting
+	return cancel
 }
 
 // handleSession is used to handle an established session.
-func (p *Provider) handleSession(list net.Listener, doneCh chan struct{}) {
-	defer close(doneCh)
-	defer list.Close()
-	// Accept new connections
-	for !p.isStopped() {
-		conn, err := list.Accept()
-		if err != nil {
-			// Do not log an error if we are shutting down
-			if !p.isStopped() {
-				p.logger.Error("failed to accept connection", "error", err)
+func (p *Provider) handleSession(ctx context.Context, yamux net.Listener) error {
+	var done = make(chan bool)
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		// make the other go routine return
+		// if yamux.Accept() errors out
+		defer close(done)
+		defer yamux.Close()
+		for {
+			if conn, err := yamux.Accept(); err != nil {
+				select {
+				case <-ctx.Done():
+					// Do not log an error if we are shutting down
+				default:
+					p.logger.Error("failed to accept connection", "error", err)
+				}
+				return err
+			} else {
+				p.logger.Debug("accepted connection")
+				go p.handleConnection(ctx, conn)
 			}
-			return
 		}
-		p.logger.Debug("accepted connection")
-		go p.handleConnection(conn)
-	}
+	})
+
+	g.Go(func() error {
+		// return nil here so that g.Wait()
+		// always picks the error the Accept() routine
+		// returned.
+		for {
+			select {
+			case <-done:
+				// the other go routine returned with an error
+				// and closed the yamux client
+				return nil
+
+			case <-ctx.Done():
+				// make the other go routine return
+				// if ctx is canceled()
+				yamux.Close()
+				return nil
+			}
+		}
+	})
+
+	return g.Wait()
 }
 
 // handleConnection handles an incoming connection.
-func (p *Provider) handleConnection(conn net.Conn) {
+func (p *Provider) handleConnection(ctx context.Context, conn net.Conn) {
 	// Create an RPC server to handle inbound
 	pe := &providerEndpoint{p: p}
 	rpcServer := rpc.NewServer()
@@ -359,7 +436,13 @@ func (p *Provider) handleConnection(conn net.Conn) {
 		}
 	}()
 
-	for !p.isStopped() {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		if err := rpcServer.ServeRequest(rpcCodec); err != nil {
 			if err != io.EOF && !strings.Contains(err.Error(), "closed") {
 				p.logger.Error("RPC error", "error", err)
@@ -376,14 +459,8 @@ func (p *Provider) handleConnection(conn net.Conn) {
 	}
 }
 
-// clientSetup is used to setup a new connection.
-func (p *Provider) clientSetup() (*client.Client, error) {
-	// Reset the previous backoff
-	p.backoffLock.Lock()
-	p.noRetry = false
-	p.backoff = 0
-	p.backoffLock.Unlock()
-
+// connect sets up a new connection to a broker.
+func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 	// Dial a new connection
 	opts := client.Opts{
 		Dialer: &tcp.Dialer{
@@ -391,35 +468,19 @@ func (p *Provider) clientSetup() (*client.Client, error) {
 		},
 		LogOutput: p.logger.StandardWriter(&hclog.StandardLoggerOptions{InferLevels: true}),
 	}
-	client, err := client.DialOpts(p.config.HCPConfig.SCADAAddress(), &opts)
+	client, err := client.DialOptsContext(ctx, p.config.HCPConfig.SCADAAddress(), &opts)
 	if err != nil {
 		p.logger.Error("failed to dial SCADA endpoint", "error", err)
 		return nil, err
 	}
 
 	// Perform a handshake
-	resp, err := p.handshake(client)
+	_, err = p.handshake(client)
 	if err != nil {
 		p.logger.Error("handshake failed", "error", err)
 		client.Close()
 		return nil, err
 	}
-	if resp != nil && resp.SessionID != "" {
-		p.logger.Debug("assigned session ID", "id", resp.SessionID)
-	}
-	if resp != nil && !resp.Authenticated {
-		p.logger.Warn("authentication failed", "reason", resp.Reason)
-	}
-
-	// Set the new client
-	p.clientLock.Lock()
-	if p.client != nil {
-		p.client.Close()
-	}
-	p.client = client
-	p.clientLock.Unlock()
-
-	p.setSessionStatus(SessionStatusConnected)
 
 	return client, nil
 }
@@ -455,6 +516,14 @@ func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, e
 	if err := client.RPC("Session.Handshake", &req, resp); err != nil {
 		return nil, err
 	}
+
+	if resp != nil && resp.SessionID != "" {
+		p.logger.Debug("assigned session ID", "id", resp.SessionID)
+	}
+	if resp != nil && !resp.Authenticated {
+		p.logger.Warn("authentication failed", "reason", resp.Reason)
+	}
+
 	return resp, nil
 }
 
@@ -535,16 +604,9 @@ func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *Disconnect
 	pe.p.backoff = args.Backoff
 	pe.p.backoffLock.Unlock()
 
-	// Clear the session information
-	pe.p.setSessionStatus(SessionStatusDisconnected)
-
 	// Force the disconnect
 	time.AfterFunc(disconnectDelay, func() {
-		pe.p.clientLock.Lock()
-		if pe.p.client != nil {
-			pe.p.client.Close()
-		}
-		pe.p.clientLock.Unlock()
+		pe.p.statuses <- SessionStatusWaiting
 	})
 	return nil
 }

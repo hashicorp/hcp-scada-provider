@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"time"
@@ -25,4 +26,17 @@ func (d *Dialer) Dial(addr string) (net.Conn, error) {
 	}
 
 	return net.DialTimeout("tcp", addr, timeout)
+}
+
+func (d *Dialer) DialContext(ctx context.Context, addr string) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	if d.TLSConfig != nil {
+		dd := tls.Dialer{Config: d.TLSConfig}
+		return dd.DialContext(ctx, "tcp", addr)
+	} else {
+		var dd net.Dialer
+		return dd.DialContext(ctx, "tcp", addr)
+	}
 }
