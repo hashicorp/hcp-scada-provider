@@ -154,27 +154,38 @@ func (p *Provider) isStopped() bool {
 	return !p.running
 }
 
-// SetMetaValue sets the meta-data value. Empty values will not be
-// transmitted to the broker.
+// UpdateMeta updates the internal map of meta-data values
+// and performs a rehandshake to update the broker with the new values.
 //
-// New meta data can be added at any time.
-func (p *Provider) SetMetaValue(key, value string) {
+// The provided map is cloned and can be modified after this function returns.
+func (p *Provider) UpdateMeta(m map[string]string) {
+	// copy the map
+	var meta = make(map[string]string, len(m))
+	for k, v := range m {
+		meta[k] = v
+	}
+
 	p.metaLock.Lock()
 	defer p.metaLock.Unlock()
+	p.meta = meta
 
-	// Remove the value if it is empty
-	if value == "" {
-		delete(p.meta, key)
-	} else {
-		p.meta[key] = value
-	}
 	// tell the run loop to re-handshake and update the broker
 	p.action(actionRehandshake)
 }
 
 // GetMeta returns the provider's current meta-data.
+// The returned map is a copy and can be updated or modified.
 func (p *Provider) GetMeta() map[string]string {
-	return p.meta
+	p.metaLock.RLock()
+	defer p.metaLock.RUnlock()
+
+	// copy the map
+	var meta = make(map[string]string, len(p.meta))
+	for k, v := range p.meta {
+		meta[k] = v
+	}
+
+	return meta
 }
 
 // Listen will expose the provided capability and make new connections
@@ -543,7 +554,7 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (*types
 		ServiceVersion: "0.0.1",
 
 		Capabilities: capabilities,
-		Meta:         p.GetMeta(),
+		Meta:         p.meta,
 	}
 	resp := new(types.HandshakeResponse)
 	if err := client.RPC("Session.Handshake", &req, resp); err != nil {
