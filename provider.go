@@ -42,6 +42,13 @@ type handler struct {
 	listener net.Listener
 }
 
+// errorTime is a container for an error
+// and a timestamp of when error occured.
+type errorTime struct {
+	error
+	time.Time
+}
+
 // New creates a new SCADA provider instance using the configuration in config.
 func New(config *Config) (SCADAProvider, error) {
 	if config.Logger == nil {
@@ -83,6 +90,8 @@ type Provider struct {
 	statuses      chan SessionStatus
 
 	cancel context.CancelFunc
+
+	errorTime errorTime
 }
 
 // construct is used to create a new provider.
@@ -239,6 +248,13 @@ func (p *Provider) SessionStatus() SessionStatus {
 	return p.sessionStatus
 }
 
+// LastError returns the last error recorded in the provider
+// connection state engine as well as the time at which the error occured.
+// That record is erased at each occasion when the provider achieves a new connection.
+func (p *Provider) LastError() (time.Time, error) {
+	return p.errorTime.Time, p.errorTime.error
+}
+
 func (p *Provider) backoffReset() {
 	// Reset the previous backoff
 	p.backoffLock.Lock()
@@ -346,6 +362,8 @@ func (p *Provider) run() context.CancelFunc {
 					p.sessionStatus = SessionStatusConnected
 					// reset any longer backoff period set by the Disconnect RPC call
 					p.backoffReset()
+					// reset the errorTime
+					p.errorTime = errorTime{}
 					go func(client *client.Client) {
 						// Handle the session
 						if err := p.handleSession(ctx, client); err != nil {

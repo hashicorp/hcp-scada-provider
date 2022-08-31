@@ -2,6 +2,7 @@ package provider
 
 import (
 	"net"
+	"time"
 )
 
 // SCADAProvider allows to expose services via SCADA capabilities.
@@ -42,6 +43,11 @@ type SCADAProvider interface {
 
 	// SessionStatus will return the status of the SCADA connection.
 	SessionStatus() SessionStatus
+
+	// LastError returns the last error recorded in the provider
+	// connection state engine as well as the time at which the error occured.
+	// That record is erased at each occasion when the provider achieves a new connection.
+	LastError() (time.Time, error)
 }
 
 // SessionStatus is used to express the current status of the SCADA session.
