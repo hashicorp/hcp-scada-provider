@@ -23,7 +23,7 @@ type HandshakeRequest struct {
 
 	// Resource is HCP Resource that is registering as a provider. This is recommended over ServiceID. The Resource's
 	// internal ID will be used to map providers to consumers which will be looked up from Resource-manager.
-	Resource models.HashicorpCloudLocationLink
+	Resource *models.HashicorpCloudLocationLink
 
 	// Capabilities is the list of services that this provider can provide. This could e.g. be "gRPC" or "HTTP".
 	Capabilities map[string]int

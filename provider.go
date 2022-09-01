@@ -546,7 +546,7 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (*types
 
 	req := types.HandshakeRequest{
 		Service:  p.config.Service,
-		Resource: p.config.Resource,
+		Resource: &p.config.Resource,
 
 		AccessToken: oauthToken.AccessToken,
 
