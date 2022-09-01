@@ -264,7 +264,7 @@ func TestProvider_Setup(t *testing.T) {
 
 	exp := &types.HandshakeRequest{
 		Service: "test",
-		Resource: cloud.HashicorpCloudLocationLink{
+		Resource: &cloud.HashicorpCloudLocationLink{
 			ID: resourceID,
 			Location: &cloud.HashicorpCloudLocationLocation{
 				ProjectID:      projectID,
