@@ -252,6 +252,8 @@ github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ
 github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hashicorp/hcp-sdk-go v0.19.1-0.20220622092037-0cc7d3a5b743 h1:q+K0cjbEVGVsqTjeBRo35ehFNwK+kKXJzzjN5EjROPk=
 github.com/hashicorp/hcp-sdk-go v0.19.1-0.20220622092037-0cc7d3a5b743/go.mod h1:R44DJFnWufG+C89Ozlg/7ILrK3Ulh8g4zT8t8Ioe0KQ=
+github.com/hashicorp/hcp-sdk-go v0.22.0 h1:LWkLOkJFYWSojBM3IkwvYK6nrwrL+p4Fw8zEaoCQG10=
+github.com/hashicorp/hcp-sdk-go v0.22.0/go.mod h1:mM3nYdVHuv2X2tv88MGVKRf/o2k3zF8jUZSMkwICQ28=
 github.com/hashicorp/net-rpc-msgpackrpc v0.0.0-20151116020338-a14192a58a69 h1:lc3c72qGlIMDqQpQH82Y4vaglRMMFdJbziYWriR4UcE=
 github.com/hashicorp/net-rpc-msgpackrpc v0.0.0-20151116020338-a14192a58a69/go.mod h1:/z+jUGRBlwVpUZfjute9jWaF6/HuhjuFQuL1YXzVD1Q=
 github.com/hashicorp/yamux v0.0.0-20211028200310-0bc27b27de87 h1:xixZ2bWeofWV68J+x6AzmKuVM/JWCQwkWm6GW/MUR6I=
