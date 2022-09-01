@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	"github.com/hashicorp/hcp-sdk-go/clients/cloud-shared/v1/models"
 )
 
@@ -38,4 +40,7 @@ type HandshakeResponse struct {
 	Authenticated bool
 	SessionID     string
 	Reason        string
+	// Expiry is the expiration time of the session. If the session is not re-handshaked
+	// before Expiry it will get disconnected.
+	Expiry time.Time
 }
