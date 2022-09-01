@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/hashicorp/go-hclog v1.2.1
-	github.com/hashicorp/hcp-sdk-go v0.19.1-0.20220622092037-0cc7d3a5b743
+	github.com/hashicorp/hcp-sdk-go v0.22.0
 	github.com/hashicorp/net-rpc-msgpackrpc v0.0.0-20151116020338-a14192a58a69
 	github.com/hashicorp/yamux v0.0.0-20211028200310-0bc27b27de87
 	github.com/stretchr/testify v1.7.2
@@ -38,8 +38,10 @@ require (
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
 	go.mongodb.org/mongo-driver v1.4.6 // indirect
 	golang.org/x/net v0.0.0-20210119194325-5f4716e94777 // indirect
