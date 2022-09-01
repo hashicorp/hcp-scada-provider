@@ -40,5 +40,7 @@ type HandshakeResponse struct {
 	Authenticated bool
 	SessionID     string
 	Reason        string
-	Refresh       time.Duration // the recommended refresh interval before the next re-handshake
+	// Expiry is the expiration time of the session. If the session is not re-handshaked
+	// before Expiry it will get disconnected.
+	Expiry time.Time
 }
