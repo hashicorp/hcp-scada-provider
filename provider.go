@@ -400,7 +400,7 @@ func (p *Provider) run() context.CancelFunc {
 				}
 				// handshake will close cl on errors
 				if response, err := p.handshake(ctx, cl); err == nil {
-					// reset the ticker if the duration has changed
+					// reset the ticker and keep a record of the new duration, it might have changed
 					tickerDuration = resetTicker(tickerDuration, time.Now(), response.Expiry, ticker)
 				}
 
