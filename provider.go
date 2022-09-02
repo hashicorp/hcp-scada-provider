@@ -14,6 +14,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
+	"golang.org/x/oauth2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
@@ -31,6 +32,10 @@ const (
 	// disconnectDelay is the amount of time to wait between the moment
 	// the disconnect RPC call is received and actually disconnecting the provider.
 	disconnectDelay = time.Second
+
+	// defaultExpiryTicker sets up a default time for the session expiry ticker
+	// in the run() loop
+	defaultExpiry = 10 * time.Minute
 )
 
 var (
@@ -300,13 +305,19 @@ func (p *Provider) wait(ctx context.Context) error {
 
 // run is a long running routine to manage the provider.
 func (p *Provider) run() context.CancelFunc {
+	// setup a statuses channel to communicate with ourselves
 	var statuses = make(chan SessionStatus)
+
+	// setup a ticker for session's expiry
+	var tickerDuration = defaultExpiry
+	var ticker = time.NewTicker(tickerDuration)
 
 	// setup a context that will
 	// cancel on stop
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
+		defer ticker.Stop()
 		defer cancel()
 		var cl *client.Client
 		// engage in running the provider
@@ -319,7 +330,7 @@ func (p *Provider) run() context.CancelFunc {
 					// backoff
 					go func() {
 						if err := p.wait(ctx); err != nil {
-							// wait returns an errors if we shouldn't retry
+							// wait returns an error if we shouldn't retry
 							// or if ctx is canceled()
 							statuses <- SessionStatusDisconnected
 						} else {
@@ -334,10 +345,16 @@ func (p *Provider) run() context.CancelFunc {
 						// if we get canceled() during this,
 						// connect will error out and we go to SessionStatusWaiting
 						if client, err := p.connect(ctx); err != nil {
+							// not connected
+							statuses <- SessionStatusWaiting
+						} else if response, err := p.handshake(ctx, client); err != nil {
 							// connect closes client if any error
 							// occured at handshake() except for resp.Authenticated == false
 							statuses <- SessionStatusWaiting
 						} else {
+							// reset the ticker if the duration has changed
+							tickerDuration = resetTicker(tickerDuration, time.Now(), response.Expiry, ticker)
+							// assigned the newly created client to this routine's cl
 							cl = client
 							statuses <- SessionStatusConnected
 						}
@@ -362,6 +379,18 @@ func (p *Provider) run() context.CancelFunc {
 					// after officially disconnecting, reset the backoff period
 					p.backoffReset()
 					return
+				}
+
+			case <-ticker.C:
+				// it's time to refresh the session with the broker
+				// by issuing a re-handshake
+				if p.sessionStatus != SessionStatusConnected {
+					continue
+				}
+				// handshake will close cl on errors
+				if response, err := p.handshake(ctx, cl); err == nil {
+					// reset the ticker if the duration has changed
+					tickerDuration = resetTicker(tickerDuration, time.Now(), response.Expiry, ticker)
 				}
 
 			case action := <-p.actions:
@@ -502,18 +531,17 @@ func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 		return nil, err
 	}
 
-	// Perform a handshake
-	_, err = p.handshake(ctx, client)
-	if err != nil {
-		p.logger.Error("handshake failed", "error", err)
-		return nil, err
-	}
-
 	return client, nil
 }
 
 // handshake does the initial handshake.
-func (p *Provider) handshake(ctx context.Context, client *client.Client) (*types.HandshakeResponse, error) {
+func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *types.HandshakeResponse, err error) {
+	defer func() {
+		if err != nil {
+			p.logger.Error("handshake failed", "error", err)
+		}
+	}()
+
 	// Build the set of capabilities based on the registered handlers.
 	p.handlersLock.RLock()
 	capabilities := make(map[string]int, len(p.handlers))
@@ -522,10 +550,12 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (*types
 	}
 	p.handlersLock.RUnlock()
 
-	oauthToken, err := p.config.HCPConfig.Token()
+	var oauthToken *oauth2.Token
+	oauthToken, err = p.config.HCPConfig.Token()
 	if err != nil {
 		client.Close()
-		return nil, fmt.Errorf("failed to get access token: %w", err)
+		err = fmt.Errorf("failed to get access token: %w", err)
+		return nil, err
 	}
 
 	// make sure nobody is writing to the
@@ -545,7 +575,7 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (*types
 		Capabilities: capabilities,
 		Meta:         p.GetMeta(),
 	}
-	resp := new(types.HandshakeResponse)
+	resp = new(types.HandshakeResponse)
 	if err := client.RPC("Session.Handshake", &req, resp); err != nil {
 		client.Close()
 		return nil, err
@@ -643,6 +673,26 @@ func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *Disconnect
 		pe.p.action(actionDisconnect)
 	})
 	return nil
+}
+
+// resetTicker resets ticker's period's to expiry-time.Now(). If the value of expiry is zero, it
+// will return duration. If the value of expiry is before now, it will return duration.
+func resetTicker(duration time.Duration, now, expiry time.Time, ticker *time.Ticker) time.Duration {
+	// reject expiry time zero
+	if expiry.IsZero() {
+		return duration
+	}
+	// reject expiry time in the past
+	if expiry.Before(now) {
+		return duration
+	}
+
+	d := expiry.Sub(now)
+	if d != duration {
+		ticker.Reset(d)
+	}
+
+	return d
 }
 
 var _ SCADAProvider = &Provider{}

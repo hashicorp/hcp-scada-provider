@@ -126,6 +126,36 @@ func TestSCADAProvider(t *testing.T) {
 	})
 }
 
+func TestResetTicker(t *testing.T) {
+	var duration = 1 * time.Millisecond
+	var ticker = time.NewTicker(duration)
+	ctx, cancel := context.WithTimeout(context.Background(), duration*4)
+	defer cancel()
+
+	r := require.New(t)
+
+	// the base case
+	select {
+	case <-ctx.Done():
+		t.Errorf("context canceled before the ticker ticked")
+	case <-ticker.C:
+
+	}
+
+	var now = time.Now()
+
+	// run resetTicker while pretenting the current duration is duration*2 and expect
+	// it will reset it to now.Add(duration)
+	var newDuration = resetTicker(duration*2, now, now.Add(duration), ticker)
+	// newDuration should have been reset to the value of duration
+	r.Equal(duration, newDuration, "newDuration expected to be %v and is %v", duration, newDuration)
+
+	// run resetTicker with the now time after expiry and expect it to return
+	// the input value it received
+	newDuration = resetTicker(duration, now.Add(duration), now, ticker)
+	r.Equal(duration, newDuration, "newDuration expected to be %v and is %v", duration, newDuration)
+}
+
 func TestProvider_StartStop(t *testing.T) {
 	require := require.New(t)
 
