@@ -33,9 +33,14 @@ const (
 	// the disconnect RPC call is received and actually disconnecting the provider.
 	disconnectDelay = time.Second
 
-	// defaultExpiryTicker sets up a default time for the session expiry ticker
-	// in the run() loop
-	defaultExpiry = 10 * time.Minute
+	// expiryDefault sets up a default time for the session expiry ticker
+	// in the run() loop.
+	expiryDefault = 10 * time.Minute
+	// expiryFactor is the value to multiply the
+	// the Expiry duration with and reduce it's value to
+	// rehanshake within a good time margin, before the broker
+	// closes the session.
+	expiryFactor = 0.9
 )
 
 var (
@@ -320,8 +325,7 @@ func (p *Provider) run() context.CancelFunc {
 	var statuses = make(chan SessionStatus)
 
 	// setup a ticker for session's expiry
-	var tickerDuration = defaultExpiry
-	var ticker = time.NewTicker(tickerDuration)
+	var ticker = time.NewTicker(expiryDefault)
 
 	// setup a context that will
 	// cancel on stop
@@ -363,8 +367,8 @@ func (p *Provider) run() context.CancelFunc {
 							// occured at handshake() except for resp.Authenticated == false
 							statuses <- SessionStatusWaiting
 						} else {
-							// reset the ticker and keep a record of the new duration, it might have changed
-							tickerDuration = resetTicker(tickerDuration, time.Now(), response.Expiry, ticker)
+							// reset the ticker
+							resetTicker(time.Now(), response.Expiry, ticker)
 							// assigned the newly created client to this routine's cl
 							cl = client
 							statuses <- SessionStatusConnected
@@ -400,8 +404,8 @@ func (p *Provider) run() context.CancelFunc {
 				}
 				// handshake will close cl on errors
 				if response, err := p.handshake(ctx, cl); err == nil {
-					// reset the ticker and keep a record of the new duration, it might have changed
-					tickerDuration = resetTicker(tickerDuration, time.Now(), response.Expiry, ticker)
+					// reset the ticker
+					resetTicker(time.Now(), response.Expiry, ticker)
 				}
 
 			case action := <-p.actions:
@@ -687,22 +691,35 @@ func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *Disconnect
 }
 
 // resetTicker resets ticker's period's to expiry-time.Now(). If the value of expiry is zero, it
-// will return duration. If the value of expiry is before now, it will return duration.
-func resetTicker(duration time.Duration, now, expiry time.Time, ticker *time.Ticker) time.Duration {
+// will return expiryDefault. If the value of expiry is before now, it will return expiryDefault.
+// It applies expiryFactor to calculated duration before returning.
+// for example, duration = 60s will return 54s with an expiryFactor of 0.90.
+// note that this function will return incorrect results for expiry times smaller than 2 seconds.
+func resetTicker(now, expiry time.Time, ticker *time.Ticker) time.Duration {
 	// reject expiry time zero
 	if expiry.IsZero() {
-		return duration
+		return calculateExpiryFactor(expiryDefault)
 	}
 	// reject expiry time in the past
 	if expiry.Before(now) {
-		return duration
+		return calculateExpiryFactor(expiryDefault)
 	}
-
+	// calculate expiry-time.Now()
 	d := expiry.Sub(now)
-	if d != duration {
-		ticker.Reset(d)
-	}
+	// calculate d after expiryFactor
+	d = calculateExpiryFactor(d)
+	// reset the ticker
+	ticker.Reset(d)
 
+	return d
+}
+
+// calculateExpiryFactor multiplies d by expiryFactor and
+// returns the multiplied time.Duration.
+func calculateExpiryFactor(d time.Duration) time.Duration {
+	var seconds = d.Seconds()
+	var factored = seconds * expiryFactor
+	d = time.Duration(factored) * time.Second
 	return d
 }
 

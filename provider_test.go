@@ -129,6 +129,8 @@ func TestSCADAProvider(t *testing.T) {
 func TestResetTicker(t *testing.T) {
 	var duration = 1 * time.Millisecond
 	var ticker = time.NewTicker(duration)
+	defer ticker.Stop()
+
 	ctx, cancel := context.WithTimeout(context.Background(), duration*4)
 	defer cancel()
 
@@ -143,17 +145,25 @@ func TestResetTicker(t *testing.T) {
 	}
 
 	var now = time.Now()
+	duration = 1 * time.Minute
 
-	// run resetTicker while pretenting the current duration is duration*2 and expect
-	// it will reset it to now.Add(duration)
-	var newDuration = resetTicker(duration*2, now, now.Add(duration), ticker)
+	// run resetTicker and expect it will return duration * expiryFactor.
+	var durationAfterFactor = calculateExpiryFactor(duration)
+	var newDuration = resetTicker(now, now.Add(duration), ticker)
 	// newDuration should have been reset to the value of duration
-	r.Equal(duration, newDuration, "newDuration expected to be %v and is %v", duration, newDuration)
+	r.Equal(durationAfterFactor, newDuration, "newDuration expected to be %v and is %v", durationAfterFactor, newDuration)
+
+	// run resetTicker with a expiry time of zero and expect it to return
+	// the default expiry time
+	durationAfterFactor = calculateExpiryFactor(expiryDefault)
+	newDuration = resetTicker(now, time.Time{}, ticker)
+	r.Equal(durationAfterFactor, newDuration, "newDuration expected to be %v and is %v", durationAfterFactor, newDuration)
 
 	// run resetTicker with the now time after expiry and expect it to return
-	// the input value it received
-	newDuration = resetTicker(duration, now.Add(duration), now, ticker)
-	r.Equal(duration, newDuration, "newDuration expected to be %v and is %v", duration, newDuration)
+	// the default expiry time
+	durationAfterFactor = calculateExpiryFactor(expiryDefault)
+	newDuration = resetTicker(now.Add(duration), now, ticker)
+	r.Equal(durationAfterFactor, newDuration, "newDuration expected to be %v and is %v", durationAfterFactor, newDuration)
 }
 
 func TestProvider_StartStop(t *testing.T) {
