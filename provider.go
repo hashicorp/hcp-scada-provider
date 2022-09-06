@@ -399,14 +399,9 @@ func (p *Provider) run() context.CancelFunc {
 			case <-ticker.C:
 				// it's time to refresh the session with the broker
 				// by issuing a re-handshake
-				if p.sessionStatus != SessionStatusConnected {
-					continue
-				}
-				// handshake will close cl on errors
-				if response, err := p.handshake(ctx, cl); err == nil {
-					// reset the ticker
-					tickerReset(time.Now(), response.Expiry, ticker)
-				}
+				go func() {
+					p.actions <- actionRehandshake
+				}()
 
 			case action := <-p.actions:
 				// these actions always close `cl` if they error out, and this affects the state engine in the following ways:
