@@ -102,6 +102,9 @@ func construct(config *Config) (*Provider, error) {
 		statuses:      make(chan SessionStatus),
 	}
 
+	// set the error status
+	p.errorTime.Set(ErrProviderNotStarted)
+
 	return p, nil
 }
 
@@ -314,11 +317,14 @@ func (p *Provider) run() context.CancelFunc {
 	// cancel on stop
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// set the error status
-	p.errorTime.Set(ErrProviderNotStarted)
-
 	go func() {
+		// reset the error status to ErrProviderNotStarted on exit
+		defer p.errorTime.Set(ErrProviderNotStarted)
 		defer cancel()
+
+		// reset the error status
+		p.errorTime.Reset()
+
 		var cl *client.Client
 		// engage in running the provider
 		for {
