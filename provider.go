@@ -35,7 +35,7 @@ const (
 
 	// expiryDefault sets up a default time for the session expiry ticker
 	// in the run() loop.
-	expiryDefault = 10 * time.Minute
+	expiryDefault = 60 * time.Minute
 	// expiryFactor is the value to multiply the
 	// the Expiry duration with and reduce it's value to
 	// rehanshake within a good time margin, before the broker
@@ -405,7 +405,7 @@ func (p *Provider) run() context.CancelFunc {
 				// handshake will close cl on errors
 				if response, err := p.handshake(ctx, cl); err == nil {
 					// reset the ticker
-					resetTicker(time.Now(), response.Expiry, ticker)
+					tickerReset(time.Now(), response.Expiry, ticker)
 				}
 
 			case action := <-p.actions:
@@ -690,12 +690,12 @@ func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *Disconnect
 	return nil
 }
 
-// resetTicker resets ticker's period's to expiry-time.Now(). If the value of expiry is zero, it
+// tickerReset resets ticker's period's to expiry-time.Now(). If the value of expiry is zero, it
 // will return expiryDefault. If the value of expiry is before now, it will return expiryDefault.
 // It applies expiryFactor to calculated duration before returning.
 // for example, duration = 60s will return 54s with an expiryFactor of 0.90.
 // note that this function will return incorrect results for expiry times smaller than 2 seconds.
-func resetTicker(now, expiry time.Time, ticker *time.Ticker) time.Duration {
+func tickerReset(now, expiry time.Time, ticker *time.Ticker) time.Duration {
 	// reject expiry time zero
 	if expiry.IsZero() {
 		return calculateExpiryFactor(expiryDefault)
