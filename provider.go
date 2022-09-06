@@ -431,7 +431,9 @@ func (p *Provider) run() context.CancelFunc {
 						continue
 					}
 					// handshake will close cl on errors
-					if _, err := p.handshake(ctx, cl); err != nil {
+					if response, err := p.handshake(ctx, cl); err == nil {
+						// reset the ticker
+						tickerReset(time.Now(), response.Expiry, ticker)
 					}
 				}
 
