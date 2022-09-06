@@ -8,10 +8,10 @@ import (
 // Todo: good strings and good descriptions
 var (
 	// these are provider side errors
-	ErrProviderNotStarted = errors.New("") // the provider is not started
-	ErrInvalidCredentials = errors.New("") // could not obtain a token with the configured credentials
+	ErrProviderNotStarted = errors.New("the provider is not started")                            // the provider is not started
+	ErrInvalidCredentials = errors.New("could not obtain a token with the supplied credentials") // could not obtain a token with the configured credentials
 	// this is a broker side error
-	ErrPermissionDenied = errors.New("") // the principal behind the creds does not have permission to register as provider.
+	ErrPermissionDenied = errors.New("principal does not have the permision to register as a provider") // the principal behind the creds does not have permission to register as provider.
 )
 
 // ProviderErrors maintains a mapping between error types and their variable names.
@@ -24,7 +24,7 @@ var ProviderErrors = map[error]string{
 }
 
 // errorTime is a container for an error
-// and a timestamp of when error occured.
+// and a timestamp of when that error occured.
 type errorTime struct {
 	error
 	time.Time
