@@ -149,20 +149,20 @@ func TestResetTicker(t *testing.T) {
 
 	// run resetTicker and expect it will return duration * expiryFactor.
 	var durationAfterFactor = calculateExpiryFactor(duration)
-	var newDuration = resetTicker(now, now.Add(duration), ticker)
+	var newDuration = tickerReset(now, now.Add(duration), ticker)
 	// newDuration should have been reset to the value of duration
 	r.Equal(durationAfterFactor, newDuration, "newDuration expected to be %v and is %v", durationAfterFactor, newDuration)
 
 	// run resetTicker with a expiry time of zero and expect it to return
 	// the default expiry time
 	durationAfterFactor = calculateExpiryFactor(expiryDefault)
-	newDuration = resetTicker(now, time.Time{}, ticker)
+	newDuration = tickerReset(now, time.Time{}, ticker)
 	r.Equal(durationAfterFactor, newDuration, "newDuration expected to be %v and is %v", durationAfterFactor, newDuration)
 
 	// run resetTicker with the now time after expiry and expect it to return
 	// the default expiry time
 	durationAfterFactor = calculateExpiryFactor(expiryDefault)
-	newDuration = resetTicker(now.Add(duration), now, ticker)
+	newDuration = tickerReset(now.Add(duration), now, ticker)
 	r.Equal(durationAfterFactor, newDuration, "newDuration expected to be %v and is %v", durationAfterFactor, newDuration)
 }
 
