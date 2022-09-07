@@ -14,6 +14,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
+	"golang.org/x/oauth2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
@@ -31,10 +32,20 @@ const (
 	// disconnectDelay is the amount of time to wait between the moment
 	// the disconnect RPC call is received and actually disconnecting the provider.
 	disconnectDelay = time.Second
+
+	// expiryDefault sets up a default time for the session expiry ticker
+	// in the run() loop.
+	expiryDefault = 60 * time.Minute
+	// expiryFactor is the value to multiply the
+	// the Expiry duration with and reduce it's value to
+	// rehanshake within a good time margin, before the broker
+	// closes the session.
+	expiryFactor = 0.9
 )
 
 var (
-	errNoRetry = errors.New("client is configured to not retry a connection")
+	errNoRetry    = errors.New("provider is configured to not retry a connection")
+	errNotRunning = errors.New("provider is not running")
 )
 
 type handler struct {
@@ -80,7 +91,8 @@ type Provider struct {
 	runningLock sync.Mutex
 
 	sessionStatus SessionStatus
-	statuses      chan SessionStatus
+
+	actions chan action
 
 	cancel context.CancelFunc
 
@@ -99,7 +111,7 @@ func construct(config *Config) (*Provider, error) {
 		meta:          map[string]string{},
 		handlers:      map[string]handler{},
 		sessionStatus: SessionStatusDisconnected,
-		statuses:      make(chan SessionStatus),
+		actions:       make(chan action),
 	}
 
 	// set the error status
@@ -157,32 +169,38 @@ func (p *Provider) isStopped() bool {
 	return !p.running
 }
 
-// SetMetaValue sets the meta-data value. Empty values will not be
-// transmitted to the broker.
+// UpdateMeta updates the internal map of meta-data values
+// and performs a rehandshake to update the broker with the new values.
 //
-// New meta-data can only be set when
-// the provider is stopped.
-//
-// TODO: *update this when re-handshake is completed*
-func (p *Provider) SetMetaValue(key, value string) {
-	p.metaLock.Lock()
-	defer p.metaLock.Unlock()
-
-	// Remove the value if it is empty
-	if value == "" {
-		delete(p.meta, key)
-		return
+// The provided map is cloned and can be modified after this function returns.
+func (p *Provider) UpdateMeta(m map[string]string) {
+	// copy the map
+	var meta = make(map[string]string, len(m))
+	for k, v := range m {
+		meta[k] = v
 	}
 
-	p.meta[key] = value
+	p.metaLock.Lock()
+	defer p.metaLock.Unlock()
+	p.meta = meta
+
+	// tell the run loop to re-handshake and update the broker
+	p.action(actionRehandshake)
 }
 
 // GetMeta returns the provider's current meta-data.
+// The returned map is a copy and can be updated or modified.
 func (p *Provider) GetMeta() map[string]string {
 	p.metaLock.RLock()
 	defer p.metaLock.RUnlock()
 
-	return p.meta
+	// copy the map
+	var meta = make(map[string]string, len(p.meta))
+	for k, v := range p.meta {
+		meta[k] = v
+	}
+
+	return meta
 }
 
 // Listen will expose the provided capability and make new connections
@@ -191,9 +209,7 @@ func (p *Provider) GetMeta() map[string]string {
 //
 // The method will return an existing listener if the capability already existed.
 // Listeners can be retrieved even when the provider is stopped (e.g. before it is
-// started). New capabilities can only be added while the provider is stopped.
-//
-// TODO: *update this when re-handshake is completed*
+// started). New capabilities and new meta data can be added at any time.
 //
 // The listener will only be closed, if it is closed explicitly by calling Close().
 // The listener will not be closed due to errors or when the provider is stopped.
@@ -235,6 +251,9 @@ func (p *Provider) Listen(capability string) (net.Listener, error) {
 		provider: capProvider,
 		listener: capListenerProxy,
 	}
+
+	// re-handshake to update the broker
+	p.action(actionRehandshake)
 
 	return capListenerProxy, nil
 }
@@ -285,7 +304,8 @@ func (p *Provider) backoffDuration() (time.Duration, bool) {
 }
 
 // wait is used to delay dialing on an error.
-// it will return an error if the provider context is canceled.
+// it will return an error if the connection should not be
+// retried.
 func (p *Provider) wait(ctx context.Context) error {
 	// Compute the backoff time
 	backoff, noRetry := p.backoffDuration()
@@ -313,11 +333,18 @@ func (p *Provider) wait(ctx context.Context) error {
 
 // run is a long running routine to manage the provider.
 func (p *Provider) run() context.CancelFunc {
+	// setup a statuses channel to communicate with ourselves
+	var statuses = make(chan SessionStatus)
+
+	// setup a ticker for session's expiry
+	var ticker = time.NewTicker(expiryDefault)
+
 	// setup a context that will
 	// cancel on stop
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
+		defer ticker.Stop()
 		// reset the error status to ErrProviderNotStarted on exit
 		defer p.errorTime.Set(ErrProviderNotStarted)
 		defer cancel()
@@ -329,18 +356,18 @@ func (p *Provider) run() context.CancelFunc {
 		// engage in running the provider
 		for {
 			select {
-			case status := <-p.statuses:
+			case status := <-statuses:
 				switch status {
 				case SessionStatusWaiting:
 					p.sessionStatus = SessionStatusWaiting
 					// backoff
 					go func() {
 						if err := p.wait(ctx); err != nil {
-							// wait returns an errors if we shouldn't retry
+							// wait returns an error if we shouldn't retry
 							// or if ctx is canceled()
-							p.statuses <- SessionStatusDisconnected
+							statuses <- SessionStatusDisconnected
 						} else {
-							p.statuses <- SessionStatusConnecting
+							statuses <- SessionStatusConnecting
 						}
 					}()
 
@@ -351,12 +378,18 @@ func (p *Provider) run() context.CancelFunc {
 						// if we get canceled() during this,
 						// connect will error out and we go to SessionStatusWaiting
 						if client, err := p.connect(ctx); err != nil {
+							// not connected
+							statuses <- SessionStatusWaiting
+						} else if response, err := p.handshake(ctx, client); err != nil {
 							// connect closes client if any error
 							// occured at handshake() except for resp.Authenticated == false
-							p.statuses <- SessionStatusWaiting
+							statuses <- SessionStatusWaiting
 						} else {
+							// reset the ticker
+							tickerReset(time.Now(), response.Expiry, ticker)
+							// assigned the newly created client to this routine's cl
 							cl = client
-							p.statuses <- SessionStatusConnected
+							statuses <- SessionStatusConnected
 						}
 					}()
 
@@ -372,7 +405,7 @@ func (p *Provider) run() context.CancelFunc {
 							// handleSession will always close client
 							// on errors or if the ctx is canceled().
 							// go to the waiting state
-							p.statuses <- SessionStatusWaiting
+							statuses <- SessionStatusWaiting
 						}
 					}(cl)
 
@@ -383,13 +416,48 @@ func (p *Provider) run() context.CancelFunc {
 					return
 				}
 
+			case <-ticker.C:
+				// it's time to refresh the session with the broker
+				// by issuing a re-handshake
+				go func() {
+					p.actions <- actionRehandshake
+				}()
+
+			case action := <-p.actions:
+				// if sessionStatus is not SessionStatusConnected,
+				// none of these actions can proceed
+				if p.sessionStatus != SessionStatusConnected {
+					continue
+				}
+
+				// these actions always close `cl` if they error out, and this affects the state engine in the following ways:
+				// * connect will return with an error and continue to the next state
+				// * handleSession will return with an error and continue to the next state
+				switch action {
+				case actionDisconnect:
+					// this is a disconnect signal
+					// received via RPC, we are certain to be
+					// connected. During testing we are using mocks
+					// and the client will never have been created.
+					if cl != nil {
+						cl.Close()
+					}
+
+				case actionRehandshake:
+					// handshake will close cl on errors
+					if response, err := p.handshake(ctx, cl); err == nil {
+						// reset the ticker
+						tickerReset(time.Now(), response.Expiry, ticker)
+					}
+				}
+
 				// ¯\_(ツ)_/¯
 			}
 		}
 	}()
 
 	// initialize the for loop
-	p.statuses <- SessionStatusConnecting
+	statuses <- SessionStatusConnecting
 	return cancel
 }
 
@@ -494,19 +562,17 @@ func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 		return nil, err
 	}
 
-	// Perform a handshake
-	_, err = p.handshake(client)
-	if err != nil {
-		p.logger.Error("handshake failed", "error", err)
-		client.Close()
-		return nil, err
-	}
-
 	return client, nil
 }
 
 // handshake does the initial handshake.
-func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, error) {
+func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *types.HandshakeResponse, err error) {
+	defer func() {
+		if err != nil {
+			p.logger.Error("handshake failed", "error", err)
+		}
+	}()
+
 	// Build the set of capabilities based on the registered handlers.
 	p.handlersLock.RLock()
 	capabilities := make(map[string]int, len(p.handlers))
@@ -515,14 +581,22 @@ func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, e
 	}
 	p.handlersLock.RUnlock()
 
-	oauthToken, err := p.config.HCPConfig.Token()
+	var oauthToken *oauth2.Token
+	oauthToken, err = p.config.HCPConfig.Token()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get access token: %w", err)
+		client.Close()
+		err = fmt.Errorf("failed to get access token: %w", err)
+		return nil, err
 	}
+
+	// make sure nobody is writing to the
+	// meta map while client.RPC is reading from it
+	p.metaLock.RLock()
+	defer p.metaLock.RUnlock()
 
 	req := types.HandshakeRequest{
 		Service:  p.config.Service,
-		Resource: p.config.Resource,
+		Resource: &p.config.Resource,
 
 		AccessToken: oauthToken.AccessToken,
 
@@ -530,10 +604,11 @@ func (p *Provider) handshake(client *client.Client) (*types.HandshakeResponse, e
 		ServiceVersion: "0.0.1",
 
 		Capabilities: capabilities,
-		Meta:         p.GetMeta(),
+		Meta:         p.meta,
 	}
-	resp := new(types.HandshakeResponse)
+	resp = new(types.HandshakeResponse)
 	if err := client.RPC("Session.Handshake", &req, resp); err != nil {
+		client.Close()
 		return nil, err
 	}
 
@@ -626,9 +701,42 @@ func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *Disconnect
 
 	// Force the disconnect
 	time.AfterFunc(disconnectDelay, func() {
-		pe.p.statuses <- SessionStatusWaiting
+		pe.p.action(actionDisconnect)
 	})
 	return nil
+}
+
+// tickerReset resets ticker's period's to expiry-time.Now(). If the value of expiry is zero, it
+// will return expiryDefault. If the value of expiry is before now, it will return expiryDefault.
+// It applies expiryFactor to calculated duration before returning.
+// for example, duration = 60s will return 54s with an expiryFactor of 0.90.
+// note that this function will return incorrect results for expiry times smaller than 2 seconds.
+func tickerReset(now, expiry time.Time, ticker *time.Ticker) time.Duration {
+	// reject expiry time zero
+	if expiry.IsZero() {
+		return calculateExpiryFactor(expiryDefault)
+	}
+	// reject expiry time in the past
+	if expiry.Before(now) {
+		return calculateExpiryFactor(expiryDefault)
+	}
+	// calculate expiry-time.Now()
+	d := expiry.Sub(now)
+	// calculate d after expiryFactor
+	d = calculateExpiryFactor(d)
+	// reset the ticker
+	ticker.Reset(d)
+
+	return d
+}
+
+// calculateExpiryFactor multiplies d by expiryFactor and
+// returns the multiplied time.Duration.
+func calculateExpiryFactor(d time.Duration) time.Duration {
+	var seconds = d.Seconds()
+	var factored = seconds * expiryFactor
+	d = time.Duration(factored) * time.Second
+	return d
 }
 
 var _ SCADAProvider = &Provider{}

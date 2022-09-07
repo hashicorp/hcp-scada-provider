@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	"github.com/hashicorp/hcp-sdk-go/clients/cloud-shared/v1/models"
 )
 
@@ -23,7 +25,7 @@ type HandshakeRequest struct {
 
 	// Resource is HCP Resource that is registering as a provider. This is recommended over ServiceID. The Resource's
 	// internal ID will be used to map providers to consumers which will be looked up from Resource-manager.
-	Resource models.HashicorpCloudLocationLink
+	Resource *models.HashicorpCloudLocationLink
 
 	// Capabilities is the list of services that this provider can provide. This could e.g. be "gRPC" or "HTTP".
 	Capabilities map[string]int
@@ -38,4 +40,7 @@ type HandshakeResponse struct {
 	Authenticated bool
 	SessionID     string
 	Reason        string
+	// Expiry is the expiration time of the session. If the session is not re-handshaked
+	// before Expiry it will get disconnected.
+	Expiry time.Time
 }

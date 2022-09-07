@@ -126,6 +126,46 @@ func TestSCADAProvider(t *testing.T) {
 	})
 }
 
+func TestResetTicker(t *testing.T) {
+	var duration = 1 * time.Millisecond
+	var ticker = time.NewTicker(duration)
+	defer ticker.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), duration*4)
+	defer cancel()
+
+	r := require.New(t)
+
+	// the base case
+	select {
+	case <-ctx.Done():
+		t.Errorf("context canceled before the ticker ticked")
+	case <-ticker.C:
+
+	}
+
+	var now = time.Now()
+	duration = 1 * time.Minute
+
+	// run resetTicker and expect it will return duration * expiryFactor.
+	var durationAfterFactor = calculateExpiryFactor(duration)
+	var newDuration = tickerReset(now, now.Add(duration), ticker)
+	// newDuration should have been reset to the value of duration
+	r.Equal(durationAfterFactor, newDuration, "newDuration expected to be %v and is %v", durationAfterFactor, newDuration)
+
+	// run resetTicker with a expiry time of zero and expect it to return
+	// the default expiry time
+	durationAfterFactor = calculateExpiryFactor(expiryDefault)
+	newDuration = tickerReset(now, time.Time{}, ticker)
+	r.Equal(durationAfterFactor, newDuration, "newDuration expected to be %v and is %v", durationAfterFactor, newDuration)
+
+	// run resetTicker with the now time after expiry and expect it to return
+	// the default expiry time
+	durationAfterFactor = calculateExpiryFactor(expiryDefault)
+	newDuration = tickerReset(now.Add(duration), now, ticker)
+	r.Equal(durationAfterFactor, newDuration, "newDuration expected to be %v and is %v", durationAfterFactor, newDuration)
+}
+
 func TestProvider_StartStop(t *testing.T) {
 	require := require.New(t)
 
@@ -264,7 +304,7 @@ func TestProvider_Setup(t *testing.T) {
 
 	exp := &types.HandshakeRequest{
 		Service: "test",
-		Resource: cloud.HashicorpCloudLocationLink{
+		Resource: &cloud.HashicorpCloudLocationLink{
 			ID: resourceID,
 			Location: &cloud.HashicorpCloudLocationLocation{
 				ProjectID:      projectID,
