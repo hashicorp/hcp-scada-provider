@@ -400,7 +400,11 @@ func (p *Provider) run() context.CancelFunc {
 				// it's time to refresh the session with the broker
 				// by issuing a re-handshake
 				go func() {
-					p.actions <- actionRehandshake
+					select {
+					case p.actions <- actionRehandshake:
+					case <-ctx.Done():
+					}
+
 				}()
 
 			case action := <-p.actions:
