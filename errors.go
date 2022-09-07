@@ -54,13 +54,13 @@ func (et *errorTime) Reset() {
 	et.Time = time.Time{}
 }
 
-// Extract tries to map s to one of the known error values in ProviderErrors
+// Extract tries to map err to one of the known error values in ProviderErrors
 // and if it finds one, it calls Set on et. If none are found it does not change
 // anything and returns. The format we use to transmit errors over RPC errors.New() is:
 //
 //  return fmt.Errorf("%s: some problem happened with a function: %v", provider.ProviderErrors[ErrPermissionDenied], errors.New("some IO problem"))
 //
-// see HCPCO2-163
+// see HCPCO2-163.
 func (et *errorTime) Extract(err error) {
 	// split err along ":"
 	ss := strings.Split(err.Error(), ":")
