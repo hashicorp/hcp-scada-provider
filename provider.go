@@ -389,6 +389,8 @@ func (p *Provider) run() context.CancelFunc {
 						} else {
 							// reset the ticker
 							tickerReset(time.Now(), response.Expiry, ticker)
+							// reset errorTime
+							p.errorTime.Reset()
 							// assigned the newly created client to this routine's cl
 							cl = client
 							statuses <- SessionStatusConnected
