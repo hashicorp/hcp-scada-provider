@@ -2,6 +2,7 @@ package provider
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -54,11 +55,21 @@ func (et *errorTime) Reset() {
 
 // Extract tries to map s to one of the known error values in ProviderErrors
 // and if it finds one, it calls Set on et. If none are found it does not change
-// anything and returns.
+// anything and returns. The format we use to transmit errors over RPC errors.New() is:
+//
+//  return fmt.Errorf("%s: some problem happened with a function: %v", provider.ProviderErrors[ErrPermissionDenied], errors.New("some IO problem"))
+//
+// see HCPCO2-163
 func (et *errorTime) Extract(s string) {
-	// if s is a known error in reverseProviderErrors,
+	// split s along ":"
+	ss := strings.Split(s, ":")
+	if len(ss) < 2 {
+		return
+	}
+
+	// if ss[0] is a known error in reverseProviderErrors,
 	// extract it and otherwise do nothing.
-	if err, found := reverseProviderErrors[s]; found {
+	if err, found := reverseProviderErrors[ss[0]]; found {
 		et.Set(err)
 	}
 
