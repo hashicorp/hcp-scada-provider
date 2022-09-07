@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
@@ -81,7 +82,7 @@ func TestExtract(t *testing.T) {
 	var err = fmt.Errorf("%s: some problem happened with a function: %v", ProviderErrors[err1], err2)
 
 	// extract err
-	et.Extract(err.Error())
+	et.Extract(err)
 	// et.Error should be ErrPermissionDenied
 	r.Equal(ErrPermissionDenied, et.error)
 	// time should not be zero
@@ -99,7 +100,7 @@ func TestExtractBadlyFormated(t *testing.T) {
 	var err = fmt.Errorf("%s: some problem happened with a function: %v", err1.Error(), err2)
 
 	// extract err
-	et.Extract(err.Error())
+	et.Extract(err)
 	// et.Error should be nil
 	r.Nil(et.error)
 	// time should be zero
@@ -107,7 +108,7 @@ func TestExtractBadlyFormated(t *testing.T) {
 
 	// try again with a badly formated error
 	et.Reset()
-	et.Extract("not using the correct format")
+	et.Extract(errors.New("not using the correct format"))
 	// et.Error should be nil
 	r.Nil(et.error)
 	// time should be zero

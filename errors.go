@@ -61,9 +61,9 @@ func (et *errorTime) Reset() {
 //  return fmt.Errorf("%s: some problem happened with a function: %v", provider.ProviderErrors[ErrPermissionDenied], errors.New("some IO problem"))
 //
 // see HCPCO2-163
-func (et *errorTime) Extract(s string) {
-	// split s along ":"
-	ss := strings.Split(s, ":")
+func (et *errorTime) Extract(err error) {
+	// split err along ":"
+	ss := strings.Split(err.Error(), ":")
 	if len(ss) < 2 {
 		return
 	}
