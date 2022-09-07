@@ -400,11 +400,13 @@ func (p *Provider) run() context.CancelFunc {
 				// it's time to refresh the session with the broker
 				// by issuing a re-handshake
 				go func() {
+					// `case SessionStatusDisconnected` might happen while we're waiting to
+					// write to p.actions. Unblock on ctx being canceled to handle that eventuality.
+					// it might be better here to call handshake directly.
 					select {
 					case p.actions <- actionRehandshake:
 					case <-ctx.Done():
 					}
-
 				}()
 
 			case action := <-p.actions:
