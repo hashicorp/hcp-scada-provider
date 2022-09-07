@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// Todo: good strings and good descriptions
 var (
 	// these are provider side errors
 	ErrProviderNotStarted = errors.New("the provider is not started")                            // the provider is not started
@@ -43,11 +42,13 @@ type errorTime struct {
 	time.Time
 }
 
+// Set et to err and set the time to now.
 func (et *errorTime) Set(err error) {
 	et.error = err
 	et.Time = time.Now()
 }
 
+// Reset et to nil and delete the time.
 func (et *errorTime) Reset() {
 	et.error = nil
 	et.Time = time.Time{}
