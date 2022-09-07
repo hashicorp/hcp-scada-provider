@@ -331,9 +331,14 @@ func (p *Provider) run() context.CancelFunc {
 	// cancel on stop
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// setup WaitGroup to sync ctx.Done() with SessionStatusDisconnected
+	var wg sync.WaitGroup
+
 	go func() {
 		defer ticker.Stop()
 		defer cancel()
+
+		wg.Add(1)
 		var cl *client.Client
 		// engage in running the provider
 		for {
@@ -393,23 +398,23 @@ func (p *Provider) run() context.CancelFunc {
 					p.sessionStatus = SessionStatusDisconnected
 					// after officially disconnecting, reset the backoff period
 					p.backoffReset()
-					return
+					wg.Done()
 				}
 
 			case <-ticker.C:
 				// it's time to refresh the session with the broker
 				// by issuing a re-handshake
 				go func() {
-					// `case SessionStatusDisconnected` might happen while we're waiting to
-					// write to p.actions. Unblock on ctx being canceled to handle that eventuality.
-					// it might be better here to call handshake directly.
-					select {
-					case p.actions <- actionRehandshake:
-					case <-ctx.Done():
-					}
+					p.actions <- actionRehandshake
 				}()
 
 			case action := <-p.actions:
+				// if sessionStatus is not SessionStatusConnected,
+				// none of these actions can proceed
+				if p.sessionStatus != SessionStatusConnected {
+					continue
+				}
+
 				// these actions always close `cl` if they error out, and this affects the state engine in the following ways:
 				// * connect will return with an error and continue to the next state
 				// * handleSession will return with an error and continue to the next state
@@ -419,18 +424,11 @@ func (p *Provider) run() context.CancelFunc {
 					// received via RPC, we are certain to be
 					// connected. During testing we are using mocks
 					// and the client will never have been created.
-					if p.sessionStatus != SessionStatusConnected {
-						continue
-					}
-
 					if cl != nil {
 						cl.Close()
 					}
 
 				case actionRehandshake:
-					if p.sessionStatus != SessionStatusConnected {
-						continue
-					}
 					// handshake will close cl on errors
 					if response, err := p.handshake(ctx, cl); err == nil {
 						// reset the ticker
@@ -438,6 +436,10 @@ func (p *Provider) run() context.CancelFunc {
 					}
 				}
 
+			case <-ctx.Done():
+				// wait for SessionStatusDisconnected
+				wg.Wait()
+				return
 				// ¯\_(ツ)_/¯
 			}
 		}
