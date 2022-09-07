@@ -381,6 +381,8 @@ func (p *Provider) run() context.CancelFunc {
 							// not connected
 							statuses <- SessionStatusWaiting
 						} else if response, err := p.handshake(ctx, client); err != nil {
+							// see if there is any error of note to our users
+							p.errorTime.Extract(err)
 							// connect closes client if any error
 							// occured at handshake() except for resp.Authenticated == false
 							statuses <- SessionStatusWaiting
@@ -448,6 +450,9 @@ func (p *Provider) run() context.CancelFunc {
 					if response, err := p.handshake(ctx, cl); err == nil {
 						// reset the ticker
 						tickerReset(time.Now(), response.Expiry, ticker)
+					} else {
+						// see if there is any error of note to our users
+						p.errorTime.Extract(err)
 					}
 				}
 
@@ -585,7 +590,7 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *
 	oauthToken, err = p.config.HCPConfig.Token()
 	if err != nil {
 		client.Close()
-		err = fmt.Errorf("failed to get access token: %w", err)
+		err = fmt.Errorf("%s: failed to get access token: %w", ProviderErrors[ErrInvalidCredentials], err)
 		return nil, err
 	}
 
