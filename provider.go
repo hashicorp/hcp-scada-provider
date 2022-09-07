@@ -331,14 +331,11 @@ func (p *Provider) run() context.CancelFunc {
 	// cancel on stop
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// setup WaitGroup to sync ctx.Done() with SessionStatusDisconnected
-	var wg sync.WaitGroup
+	// setup done and ret to sync ctx.Done() with SessionStatusDisconnected
+	var done, ret = make(chan bool), make(chan bool)
 
 	go func() {
-		defer ticker.Stop()
 		defer cancel()
-
-		wg.Add(1)
 		var cl *client.Client
 		// engage in running the provider
 		for {
@@ -396,9 +393,9 @@ func (p *Provider) run() context.CancelFunc {
 
 				case SessionStatusDisconnected:
 					p.sessionStatus = SessionStatusDisconnected
-					// after officially disconnecting, reset the backoff period
+					// after officially disconnecting, reset the backoff period for this provider
 					p.backoffReset()
-					wg.Done()
+					close(done)
 				}
 
 			case <-ticker.C:
@@ -415,30 +412,38 @@ func (p *Provider) run() context.CancelFunc {
 					continue
 				}
 
-				// these actions always close `cl` if they error out, and this affects the state engine in the following ways:
-				// * connect will return with an error and continue to the next state
+				// these actions always close `cl` directly, or when they error out.
+				// this affects the state engine in the following ways:
+				// * connect, handshake will return with an error and continue to the next state
 				// * handleSession will return with an error and continue to the next state
 				switch action {
 				case actionDisconnect:
-					// this is a disconnect signal
-					// received via RPC, we are certain to be
-					// connected. During testing we are using mocks
-					// and the client will never have been created.
-					if cl != nil {
-						cl.Close()
-					}
+					cl.Close()
 
 				case actionRehandshake:
-					// handshake will close cl on errors
 					if response, err := p.handshake(ctx, cl); err == nil {
 						// reset the ticker
 						tickerReset(time.Now(), response.Expiry, ticker)
 					}
 				}
 
-			case <-ctx.Done():
-				// wait for SessionStatusDisconnected
-				wg.Wait()
+			case <-done:
+				// exit the run() loop only when done is closed and ctx is canceled.
+				// we don't want to stop processing events here even if the
+				// session is SessionStatusDisconnected, until we are told to Stop().
+				// * cancel will eventually close the done channel
+				// * the Disconnect RPC call with NoRetry = true will eventually close the done channel
+				//   but it will fire that action long after (disconnectDelay) we received the RPC call.
+				//   The run() loop must still be running when it does, unless we are explicitely Stop()
+				//   in which case we are protected by the running mutex.
+				ticker.Stop()
+				done = nil
+				go func() {
+					<-ctx.Done()
+					close(ret)
+				}()
+
+			case <-ret:
 				return
 				// ¯\_(ツ)_/¯
 			}
