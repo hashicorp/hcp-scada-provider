@@ -44,10 +44,8 @@ type SCADAProvider interface {
 	//
 	// A few common internal error will return a known type:
 	// * ErrProviderNotStarted: the provider is not started
-	// * ErrPermissionDenied: could not obtain a token with the supplied credentials (not supported yet)
-	// * ErrInvalidCredentials: principal does not have the permision to register as a provider (not supported yet)
-	//
-	// Any other internal error will be returned directly and unchanged.
+	// * ErrInvalidCredentials: could not obtain a token with the supplied credentials (not supported yet)
+	// * ErrPermissionDenied: principal does not have the permision to register as a provider (not supported yet)
 	LastError() (time.Time, error)
 }
 
