@@ -166,8 +166,6 @@ func (p *Provider) isStopped() bool {
 
 // UpdateMeta updates the internal map of meta-data values
 // and performs a rehandshake to update the broker with the new values.
-//
-// The provided map is cloned and can be modified after this function returns.
 func (p *Provider) UpdateMeta(m map[string]string) {
 	p.metaLock.Lock()
 	defer p.metaLock.Unlock()
