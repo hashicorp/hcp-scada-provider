@@ -60,7 +60,7 @@ func (te *timeError) Error() string {
 //
 // We encode the type that is meant to be returned in the error string as the first value, followed with a ":'.
 //
-//  return fmt.Errorf("%s: some problem happened with a function: %v", provider.ErrorPrefixes[ErrPermissionDenied], errors.New("some IO problem"))
+//  return fmt.Errorf("%s: a problem happened with a function: %v", provider.ErrorPrefixes[ErrPermissionDenied], errors.New("a IO problem"))
 func NewTimeError(err error) timeError {
 	var extract = func(err error) error { // split err along ":"
 		split := strings.Split(err.Error(), ":")
@@ -68,7 +68,7 @@ func NewTimeError(err error) timeError {
 			return err
 		}
 
-		// if split[0] is a known error in reverseProviderErrors,
+		// if split[0] is a known error in reverseErrorPrefixes,
 		// extract it and otherwise do nothing.
 		if err, found := reverseErrorPrefixes[split[0]]; found {
 			return err
