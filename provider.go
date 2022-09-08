@@ -78,6 +78,8 @@ type Provider struct {
 	actions chan action
 
 	cancel context.CancelFunc
+
+	lastError timeError
 }
 
 // New creates a new SCADA provider instance using the configuration in config.
@@ -110,6 +112,7 @@ func construct(config *Config) (*Provider, error) {
 		handlers:      map[string]handler{},
 		sessionStatus: SessionStatusDisconnected,
 		actions:       make(chan action),
+		lastError:     NewTimeError(ErrProviderNotStarted),
 	}
 
 	return p, nil
@@ -251,6 +254,20 @@ func (p *Provider) SessionStatus() SessionStatus {
 	return p.sessionStatus
 }
 
+// LastError returns the last error recorded in the provider
+// connection state engine as well as the time at which the error occured.
+// That record is erased at each occasion when the provider achieves a new connection.
+//
+// A few common internal error will return a known type:
+// * ErrProviderNotStarted: the provider is not started
+// * ErrInvalidCredentials: could not obtain a token with the supplied credentials (not supported yet)
+// * ErrPermissionDenied: principal does not have the permision to register as a provider (not supported yet)
+//
+// Any other internal error will be returned directly and unchanged.
+func (p *Provider) LastError() (time.Time, error) {
+	return p.lastError.Time, p.lastError.error
+}
+
 /////
 
 // run is a long running routine to manage the provider.
@@ -265,10 +282,14 @@ func (p *Provider) run() context.CancelFunc {
 	// cancel on stop
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// setup done and ret to sync ctx.Done() with SessionStatusDisconnected
+	var done, ret = make(chan bool), make(chan bool)
+
 	go func() {
-		defer ticker.Stop()
 		defer cancel()
 		var cl *client.Client
+		// clear the lastError
+		p.lastError = NewTimeError(nil)
 		// engage in running the provider
 		for {
 			select {
@@ -294,9 +315,13 @@ func (p *Provider) run() context.CancelFunc {
 						// if we get canceled() during this,
 						// connect will error out and we go to SessionStatusWaiting
 						if client, err := p.connect(ctx); err != nil {
+							// make a note of the error
+							p.lastError = NewTimeError(err)
 							// not connected
 							statuses <- SessionStatusWaiting
 						} else if response, err := p.handshake(ctx, client); err != nil {
+							// make a note of the error
+							p.lastError = NewTimeError(err)
 							// connect closes client if any error
 							// occured at handshake() except for resp.Authenticated == false
 							statuses <- SessionStatusWaiting
@@ -311,11 +336,15 @@ func (p *Provider) run() context.CancelFunc {
 
 				case SessionStatusConnected:
 					p.sessionStatus = SessionStatusConnected
+					// reset the error
+					p.lastError = NewTimeError(nil)
 					// reset any longer backoff period set by the Disconnect RPC call
 					p.backoffReset()
 					go func(client *client.Client) {
 						// Handle the session
 						if err := p.handleSession(ctx, client); err != nil {
+							// make a note of the error
+							p.lastError = NewTimeError(err)
 							// handleSession will always close client
 							// on errors or if the ctx is canceled().
 							// go to the waiting state
@@ -325,9 +354,9 @@ func (p *Provider) run() context.CancelFunc {
 
 				case SessionStatusDisconnected:
 					p.sessionStatus = SessionStatusDisconnected
-					// after officially disconnecting, reset the backoff period
+					// after officially disconnecting, reset the backoff period for this provider
 					p.backoffReset()
-					return
+					close(done)
 				}
 
 			case <-ticker.C:
@@ -338,34 +367,49 @@ func (p *Provider) run() context.CancelFunc {
 				}()
 
 			case action := <-p.actions:
-				// these actions always close `cl` if they error out, and this affects the state engine in the following ways:
-				// * connect will return with an error and continue to the next state
+				// if sessionStatus is not SessionStatusConnected,
+				// none of these actions can proceed
+				if p.sessionStatus != SessionStatusConnected {
+					continue
+				}
+
+				// these actions always close `cl` directly, or when they error out.
+				// this affects the state engine in the following ways:
+				// * connect, handshake will return with an error and continue to the next state
 				// * handleSession will return with an error and continue to the next state
 				switch action {
 				case actionDisconnect:
-					// this is a disconnect signal
-					// received via RPC, we are certain to be
-					// connected. During testing we are using mocks
-					// and the client will never have been created.
-					if p.sessionStatus != SessionStatusConnected {
-						continue
-					}
-
-					if cl != nil {
-						cl.Close()
-					}
+					cl.Close()
 
 				case actionRehandshake:
-					if p.sessionStatus != SessionStatusConnected {
-						continue
-					}
-					// handshake will close cl on errors
 					if response, err := p.handshake(ctx, cl); err == nil {
 						// reset the ticker
 						tickerReset(time.Now(), response.Expiry, ticker)
+					} else {
+						// make a note of the error
+						p.lastError = NewTimeError(err)
 					}
 				}
 
+			case <-done:
+				// exit the run() loop only when done is closed and ctx is canceled.
+				// we don't want to stop processing events here even if the
+				// session is SessionStatusDisconnected, until we are told to Stop().
+				// * cancel will eventually close the done channel
+				// * the Disconnect RPC call with NoRetry = true will eventually close the done channel
+				//   but it will fire that action long after (disconnectDelay) we received the RPC call.
+				//   The run() loop must still be running when it does, unless we are explicitely Stop()
+				//   in which case we are protected by the running mutex.
+				ticker.Stop()
+				done = nil
+				go func() {
+					<-ctx.Done()
+					close(ret)
+				}()
+
+			case <-ret:
+				p.lastError = NewTimeError(ErrProviderNotStarted)
+				return
 				// ¯\_(ツ)_/¯
 			}
 		}
