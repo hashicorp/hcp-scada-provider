@@ -96,7 +96,7 @@ type Provider struct {
 
 	cancel context.CancelFunc
 
-	timeError timeError
+	lastError timeError
 }
 
 // construct is used to create a new provider.
@@ -112,7 +112,7 @@ func construct(config *Config) (*Provider, error) {
 		handlers:      map[string]handler{},
 		sessionStatus: SessionStatusDisconnected,
 		actions:       make(chan action),
-		timeError:     NewTimeError(ErrProviderNotStarted),
+		lastError:     NewTimeError(ErrProviderNotStarted),
 	}
 
 	return p, nil
@@ -264,8 +264,15 @@ func (p *Provider) SessionStatus() SessionStatus {
 // LastError returns the last error recorded in the provider
 // connection state engine as well as the time at which the error occured.
 // That record is erased at each occasion when the provider achieves a new connection.
+//
+// A few common internal error will return a known type:
+// * ErrProviderNotStarted: the provider is not started
+// * ErrPermissionDenied: could not obtain a token with the supplied credentials (not supported yet)
+// * ErrInvalidCredentials: principal does not have the permision to register as a provider (not supported yet)
+//
+// Any other internal error will be returned directly and unchanged.
 func (p *Provider) LastError() (time.Time, error) {
-	return p.timeError.Time, p.timeError.error
+	return p.lastError.Time, p.lastError.error
 }
 
 func (p *Provider) backoffReset() {
@@ -347,6 +354,8 @@ func (p *Provider) run() context.CancelFunc {
 	go func() {
 		defer cancel()
 		var cl *client.Client
+		// clear the lastError
+		p.lastError = NewTimeError(nil)
 		// engage in running the provider
 		for {
 			select {
@@ -373,12 +382,12 @@ func (p *Provider) run() context.CancelFunc {
 						// connect will error out and we go to SessionStatusWaiting
 						if client, err := p.connect(ctx); err != nil {
 							// make a note of the error
-							p.timeError = NewTimeError(err)
+							p.lastError = NewTimeError(err)
 							// not connected
 							statuses <- SessionStatusWaiting
 						} else if response, err := p.handshake(ctx, client); err != nil {
 							// make a note of the error
-							p.timeError = NewTimeError(err)
+							p.lastError = NewTimeError(err)
 							// connect closes client if any error
 							// occured at handshake() except for resp.Authenticated == false
 							statuses <- SessionStatusWaiting
@@ -394,14 +403,14 @@ func (p *Provider) run() context.CancelFunc {
 				case SessionStatusConnected:
 					p.sessionStatus = SessionStatusConnected
 					// reset the error
-					p.timeError = NewTimeError(nil)
+					p.lastError = NewTimeError(nil)
 					// reset any longer backoff period set by the Disconnect RPC call
 					p.backoffReset()
 					go func(client *client.Client) {
 						// Handle the session
 						if err := p.handleSession(ctx, client); err != nil {
 							// make a note of the error
-							p.timeError = NewTimeError(err)
+							p.lastError = NewTimeError(err)
 							// handleSession will always close client
 							// on errors or if the ctx is canceled().
 							// go to the waiting state
@@ -444,7 +453,7 @@ func (p *Provider) run() context.CancelFunc {
 						tickerReset(time.Now(), response.Expiry, ticker)
 					} else {
 						// make a note of the error
-						p.timeError = NewTimeError(err)
+						p.lastError = NewTimeError(err)
 					}
 				}
 
@@ -465,6 +474,7 @@ func (p *Provider) run() context.CancelFunc {
 				}()
 
 			case <-ret:
+				p.lastError = NewTimeError(ErrProviderNotStarted)
 				return
 				// ¯\_(ツ)_/¯
 			}

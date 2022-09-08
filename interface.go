@@ -41,6 +41,13 @@ type SCADAProvider interface {
 	// LastError returns the last error recorded in the provider
 	// connection state engine as well as the time at which the error occured.
 	// That record is erased at each occasion when the provider achieves a new connection.
+	//
+	// A few common internal error will return a known type:
+	// * ErrProviderNotStarted: the provider is not started
+	// * ErrPermissionDenied: could not obtain a token with the supplied credentials (not supported yet)
+	// * ErrInvalidCredentials: principal does not have the permision to register as a provider (not supported yet)
+	//
+	// Any other internal error will be returned directly and unchanged.
 	LastError() (time.Time, error)
 }
 
