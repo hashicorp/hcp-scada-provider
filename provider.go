@@ -169,15 +169,13 @@ func (p *Provider) isStopped() bool {
 //
 // The provided map is cloned and can be modified after this function returns.
 func (p *Provider) UpdateMeta(m map[string]string) {
-	// copy the map
-	var meta = make(map[string]string, len(m))
-	for k, v := range m {
-		meta[k] = v
-	}
-
 	p.metaLock.Lock()
 	defer p.metaLock.Unlock()
-	p.meta = meta
+
+	// Update the map
+	for k, v := range m {
+		p.meta[k] = v
+	}
 
 	// tell the run loop to re-handshake and update the broker
 	p.action(actionRehandshake)
