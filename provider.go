@@ -53,23 +53,6 @@ type handler struct {
 	listener net.Listener
 }
 
-// New creates a new SCADA provider instance using the configuration in config.
-func New(config *Config) (SCADAProvider, error) {
-	if config.Logger == nil {
-		return nil, fmt.Errorf("failed to initialize SCADA provider: Logger must be provided")
-	}
-	if config.HCPConfig == nil {
-		return nil, fmt.Errorf("failed to initialize SCADA provider: HCPConfig must be provided")
-	}
-	err := resource.Validate(config.Resource)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize SCADA provider: %w", err)
-	}
-
-	return construct(config)
-
-}
-
 // Provider is a high-level interface to SCADA by which instances declare
 // themselves as a Service providing capabilities. Provider manages the
 // client/server interactions required, making it simpler to integrate.
@@ -99,6 +82,23 @@ type Provider struct {
 	lastError timeError
 }
 
+// New creates a new SCADA provider instance using the configuration in config.
+func New(config *Config) (SCADAProvider, error) {
+	if config.Logger == nil {
+		return nil, fmt.Errorf("failed to initialize SCADA provider: Logger must be provided")
+	}
+	if config.HCPConfig == nil {
+		return nil, fmt.Errorf("failed to initialize SCADA provider: HCPConfig must be provided")
+	}
+	err := resource.Validate(config.Resource)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize SCADA provider: %w", err)
+	}
+
+	return construct(config)
+
+}
+
 // construct is used to create a new provider.
 func construct(config *Config) (*Provider, error) {
 	if err := config.Validate(); err != nil {
@@ -116,55 +116,6 @@ func construct(config *Config) (*Provider, error) {
 	}
 
 	return p, nil
-}
-
-// Start will register the provider on the SCADA broker and expose the
-// registered capabilities.
-func (p *Provider) Start() error {
-	p.runningLock.Lock()
-	defer p.runningLock.Unlock()
-
-	// Check if the provider is already running
-	if p.running {
-		return nil
-	}
-
-	p.logger.Info("starting")
-
-	// Set the provider to its running state
-	p.running = true
-	// Run the provider
-	p.cancel = p.run()
-
-	return nil
-}
-
-// Stop will gracefully close the currently active SCADA session. This will
-// not close the capability listeners.
-func (p *Provider) Stop() error {
-	p.runningLock.Lock()
-	defer p.runningLock.Unlock()
-
-	// Check if the provider is already stopped
-	if !p.running {
-		return nil
-	}
-
-	p.logger.Info("stopping")
-
-	// Stop the provider
-	p.cancel()
-	// Set the provider to its non-running state
-	p.running = false
-
-	return nil
-}
-
-// isStopped checks if the provider has been stopped.
-func (p *Provider) isStopped() bool {
-	p.runningLock.Lock()
-	defer p.runningLock.Unlock()
-	return !p.running
 }
 
 // UpdateMeta updates the internal map of meta-data values
@@ -256,6 +207,48 @@ func (p *Provider) Listen(capability string) (net.Listener, error) {
 	return capListenerProxy, nil
 }
 
+// Start will register the provider on the SCADA broker and expose the
+// registered capabilities.
+func (p *Provider) Start() error {
+	p.runningLock.Lock()
+	defer p.runningLock.Unlock()
+
+	// Check if the provider is already running
+	if p.running {
+		return nil
+	}
+
+	p.logger.Info("starting")
+
+	// Set the provider to its running state
+	p.running = true
+	// Run the provider
+	p.cancel = p.run()
+
+	return nil
+}
+
+// Stop will gracefully close the currently active SCADA session. This will
+// not close the capability listeners.
+func (p *Provider) Stop() error {
+	p.runningLock.Lock()
+	defer p.runningLock.Unlock()
+
+	// Check if the provider is already stopped
+	if !p.running {
+		return nil
+	}
+
+	p.logger.Info("stopping")
+
+	// Stop the provider
+	p.cancel()
+	// Set the provider to its non-running state
+	p.running = false
+
+	return nil
+}
+
 // SessionStatus returns the status of the SCADA connection.
 func (p *Provider) SessionStatus() SessionStatus {
 	return p.sessionStatus
@@ -275,66 +268,7 @@ func (p *Provider) LastError() (time.Time, error) {
 	return p.lastError.Time, p.lastError.error
 }
 
-func (p *Provider) backoffReset() {
-	// Reset the previous backoff
-	p.backoffLock.Lock()
-	p.noRetry = false
-	p.backoff = 0
-	p.backoffLock.Unlock()
-}
-
-// backoffDuration is used to compute the next backoff duration.
-// it returns the backoff time to wait for and a bool that will be
-// set to true if no retries should be attempted.
-func (p *Provider) backoffDuration() (time.Duration, bool) {
-	// Use the default backoff
-	backoff := defaultBackoff
-
-	// Check for a server specified backoff
-	p.backoffLock.Lock()
-	defer p.backoffLock.Unlock()
-	if p.backoff != 0 {
-		backoff = p.backoff
-	}
-	if p.noRetry {
-		backoff = 0
-	}
-
-	// Use the test backoff
-	if p.config.TestBackoff != 0 {
-		backoff = p.config.TestBackoff
-	}
-
-	return backoff, p.noRetry
-}
-
-// wait is used to delay dialing on an error.
-// it will return an error if the connection should not be
-// retried.
-func (p *Provider) wait(ctx context.Context) error {
-	// Compute the backoff time
-	backoff, noRetry := p.backoffDuration()
-	// is this a no retry situation?
-	if noRetry {
-		return errNoRetry
-	}
-
-	// Setup a wait timer
-	var wait <-chan time.Time
-	if backoff > 0 {
-		backoff = backoff + time.Duration(rand.Uint32())%backoff
-		p.logger.Debug("backing off", "seconds", backoff.Seconds())
-		wait = time.After(backoff)
-	}
-
-	// Wait until timer or shutdown
-	select {
-	case <-wait:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
+/////
 
 // run is a long running routine to manage the provider.
 func (p *Provider) run() context.CancelFunc {
@@ -486,6 +420,81 @@ func (p *Provider) run() context.CancelFunc {
 	return cancel
 }
 
+// connect sets up a new connection to a broker.
+func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
+	// Dial a new connection
+	opts := client.Opts{
+		Dialer: &tcp.Dialer{
+			TLSConfig: p.config.HCPConfig.SCADATLSConfig(),
+		},
+		LogOutput: p.logger.StandardWriter(&hclog.StandardLoggerOptions{InferLevels: true}),
+	}
+	client, err := client.DialOptsContext(ctx, p.config.HCPConfig.SCADAAddress(), &opts)
+	if err != nil {
+		p.logger.Error("failed to dial SCADA endpoint", "error", err)
+		return nil, err
+	}
+
+	return client, nil
+}
+
+// handshake does the initial handshake.
+func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *types.HandshakeResponse, err error) {
+	defer func() {
+		if err != nil {
+			p.logger.Error("handshake failed", "error", err)
+		}
+	}()
+
+	// Build the set of capabilities based on the registered handlers.
+	p.handlersLock.RLock()
+	capabilities := make(map[string]int, len(p.handlers))
+	for h := range p.handlers {
+		capabilities[h] = 1
+	}
+	p.handlersLock.RUnlock()
+
+	var oauthToken *oauth2.Token
+	oauthToken, err = p.config.HCPConfig.Token()
+	if err != nil {
+		client.Close()
+		err = fmt.Errorf("failed to get access token: %w", err)
+		return nil, err
+	}
+
+	// make sure nobody is writing to the
+	// meta map while client.RPC is reading from it
+	p.metaLock.RLock()
+	defer p.metaLock.RUnlock()
+
+	req := types.HandshakeRequest{
+		Service:  p.config.Service,
+		Resource: &p.config.Resource,
+
+		AccessToken: oauthToken.AccessToken,
+
+		// TODO: remove once it is not required anymore.
+		ServiceVersion: "0.0.1",
+
+		Capabilities: capabilities,
+		Meta:         p.meta,
+	}
+	resp = new(types.HandshakeResponse)
+	if err := client.RPC("Session.Handshake", &req, resp); err != nil {
+		client.Close()
+		return nil, err
+	}
+
+	if resp != nil && resp.SessionID != "" {
+		p.logger.Debug("assigned session ID", "id", resp.SessionID)
+	}
+	if resp != nil && !resp.Authenticated {
+		p.logger.Warn("authentication failed", "reason", resp.Reason)
+	}
+
+	return resp, nil
+}
+
 // handleSession is used to handle an established session.
 func (p *Provider) handleSession(ctx context.Context, yamux net.Listener) error {
 	var done = make(chan bool)
@@ -572,163 +581,65 @@ func (p *Provider) handleConnection(ctx context.Context, conn net.Conn) {
 	}
 }
 
-// connect sets up a new connection to a broker.
-func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
-	// Dial a new connection
-	opts := client.Opts{
-		Dialer: &tcp.Dialer{
-			TLSConfig: p.config.HCPConfig.SCADATLSConfig(),
-		},
-		LogOutput: p.logger.StandardWriter(&hclog.StandardLoggerOptions{InferLevels: true}),
-	}
-	client, err := client.DialOptsContext(ctx, p.config.HCPConfig.SCADAAddress(), &opts)
-	if err != nil {
-		p.logger.Error("failed to dial SCADA endpoint", "error", err)
-		return nil, err
+// wait is used to delay dialing on an error.
+// it will return an error if the connection should not be
+// retried.
+func (p *Provider) wait(ctx context.Context) error {
+	// Compute the backoff time
+	backoff, noRetry := p.backoffDuration()
+	// is this a no retry situation?
+	if noRetry {
+		return errNoRetry
 	}
 
-	return client, nil
+	// Setup a wait timer
+	var wait <-chan time.Time
+	if backoff > 0 {
+		backoff = backoff + time.Duration(rand.Uint32())%backoff
+		p.logger.Debug("backing off", "seconds", backoff.Seconds())
+		wait = time.After(backoff)
+	}
+
+	// Wait until timer or shutdown
+	select {
+	case <-wait:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
-// handshake does the initial handshake.
-func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *types.HandshakeResponse, err error) {
-	defer func() {
-		if err != nil {
-			p.logger.Error("handshake failed", "error", err)
-		}
-	}()
+// backoffDuration is used to compute the next backoff duration.
+// it returns the backoff time to wait for and a bool that will be
+// set to true if no retries should be attempted.
+func (p *Provider) backoffDuration() (time.Duration, bool) {
+	// Use the default backoff
+	backoff := defaultBackoff
 
-	// Build the set of capabilities based on the registered handlers.
-	p.handlersLock.RLock()
-	capabilities := make(map[string]int, len(p.handlers))
-	for h := range p.handlers {
-		capabilities[h] = 1
+	// Check for a server specified backoff
+	p.backoffLock.Lock()
+	defer p.backoffLock.Unlock()
+	if p.backoff != 0 {
+		backoff = p.backoff
 	}
-	p.handlersLock.RUnlock()
-
-	var oauthToken *oauth2.Token
-	oauthToken, err = p.config.HCPConfig.Token()
-	if err != nil {
-		client.Close()
-		err = fmt.Errorf("failed to get access token: %w", err)
-		return nil, err
+	if p.noRetry {
+		backoff = 0
 	}
 
-	// make sure nobody is writing to the
-	// meta map while client.RPC is reading from it
-	p.metaLock.RLock()
-	defer p.metaLock.RUnlock()
-
-	req := types.HandshakeRequest{
-		Service:  p.config.Service,
-		Resource: &p.config.Resource,
-
-		AccessToken: oauthToken.AccessToken,
-
-		// TODO: remove once it is not required anymore.
-		ServiceVersion: "0.0.1",
-
-		Capabilities: capabilities,
-		Meta:         p.meta,
-	}
-	resp = new(types.HandshakeResponse)
-	if err := client.RPC("Session.Handshake", &req, resp); err != nil {
-		client.Close()
-		return nil, err
+	// Use the test backoff
+	if p.config.TestBackoff != 0 {
+		backoff = p.config.TestBackoff
 	}
 
-	if resp != nil && resp.SessionID != "" {
-		p.logger.Debug("assigned session ID", "id", resp.SessionID)
-	}
-	if resp != nil && !resp.Authenticated {
-		p.logger.Warn("authentication failed", "reason", resp.Reason)
-	}
-
-	return resp, nil
+	return backoff, p.noRetry
 }
 
-type hijackFunc func(net.Conn)
-
-// providerEndpoint is used to implement the Provider.* RPC endpoints
-// as part of the provider.
-type providerEndpoint struct {
-	p      *Provider
-	hijack hijackFunc
-}
-
-// hijacked is used to check if the connection has been hijacked.
-func (pe *providerEndpoint) hijacked() bool {
-	return pe.hijack != nil
-}
-
-// getHijack returns the hijack function.
-func (pe *providerEndpoint) getHijack() hijackFunc {
-	return pe.hijack
-}
-
-// setHijack is used to take over the yamux stream for Provider.Connect.
-func (pe *providerEndpoint) setHijack(cb hijackFunc) {
-	pe.hijack = cb
-}
-
-// Connect is invoked by the broker to connect to a capability.
-func (pe *providerEndpoint) Connect(args *ConnectRequest, resp *ConnectResponse) error {
-	pe.p.logger.Info("connect requested", "capability", args.Capability)
-
-	// Handle potential flash
-	if args.Severity != "" && args.Message != "" {
-		switch hclog.LevelFromString(args.Severity) {
-		case hclog.Trace:
-			pe.p.logger.Trace("connect message", "msg", args.Message)
-		case hclog.Debug:
-			pe.p.logger.Debug("connect message", "msg", args.Message)
-		case hclog.Info:
-			pe.p.logger.Info("connect message", "msg", args.Message)
-		case hclog.Warn:
-			pe.p.logger.Warn("connect message", "msg", args.Message)
-		}
-	}
-
-	// Look for the handler
-	pe.p.handlersLock.RLock()
-	handler := pe.p.handlers[args.Capability].provider
-	pe.p.handlersLock.RUnlock()
-	if handler == nil {
-		pe.p.logger.Warn("requested capability not available", "capability", args.Capability)
-		return fmt.Errorf("invalid capability")
-	}
-
-	// Hijack the connection
-	pe.setHijack(func(a net.Conn) {
-		if err := handler(args.Capability, args.Meta, a); err != nil {
-			pe.p.logger.Error("handler errored", "capability", args.Capability, "error", err)
-		}
-	})
-	resp.Success = true
-	return nil
-}
-
-// Disconnect is invoked by the broker to ask us to backoff.
-func (pe *providerEndpoint) Disconnect(args *DisconnectRequest, resp *DisconnectResponse) error {
-	if args.Reason == "" {
-		args.Reason = "<no reason provided>"
-	}
-	pe.p.logger.Info("disconnect requested",
-		"retry", !args.NoRetry,
-		"backoff", args.Backoff,
-		"reason", args.Reason)
-
-	// Use the backoff information
-	pe.p.backoffLock.Lock()
-	pe.p.noRetry = args.NoRetry
-	pe.p.backoff = args.Backoff
-	pe.p.backoffLock.Unlock()
-
-	// Force the disconnect
-	time.AfterFunc(disconnectDelay, func() {
-		pe.p.action(actionDisconnect)
-	})
-	return nil
+func (p *Provider) backoffReset() {
+	// Reset the previous backoff
+	p.backoffLock.Lock()
+	p.noRetry = false
+	p.backoff = 0
+	p.backoffLock.Unlock()
 }
 
 // tickerReset resets ticker's period's to expiry-time.Now(). If the value of expiry is zero, it

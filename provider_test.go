@@ -27,6 +27,13 @@ const (
 	organizationID = "ac7fb6d9-a3cc-4add-8158-045ff7d32475"
 )
 
+// isStopped checks if the provider has been stopped.
+func (p *Provider) isStopped() bool {
+	p.runningLock.Lock()
+	defer p.runningLock.Unlock()
+	return !p.running
+}
+
 func TestSCADAProvider(t *testing.T) {
 	t.Run("SCADA provider initialization fails if no Logger is provided", func(t *testing.T) {
 		_, err := New(&Config{
