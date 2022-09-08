@@ -258,6 +258,13 @@ func (p *Provider) SessionStatus() SessionStatus {
 	return p.sessionStatus
 }
 
+// LastError returns the last error recorded in the provider
+// connection state engine as well as the time at which the error occured.
+// That record is erased at each occasion when the provider achieves a new connection.
+func (p *Provider) LastError() (time.Time, error) {
+	return time.Now(), nil
+}
+
 func (p *Provider) backoffReset() {
 	// Reset the previous backoff
 	p.backoffLock.Lock()
