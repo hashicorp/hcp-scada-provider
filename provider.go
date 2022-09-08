@@ -95,6 +95,8 @@ type Provider struct {
 	actions chan action
 
 	cancel context.CancelFunc
+
+	timeError timeError
 }
 
 // construct is used to create a new provider.
@@ -110,6 +112,7 @@ func construct(config *Config) (*Provider, error) {
 		handlers:      map[string]handler{},
 		sessionStatus: SessionStatusDisconnected,
 		actions:       make(chan action),
+		timeError:     NewTimeError(ErrProviderNotStarted),
 	}
 
 	return p, nil
@@ -262,7 +265,7 @@ func (p *Provider) SessionStatus() SessionStatus {
 // connection state engine as well as the time at which the error occured.
 // That record is erased at each occasion when the provider achieves a new connection.
 func (p *Provider) LastError() (time.Time, error) {
-	return time.Now(), nil
+	return p.timeError.Time, p.timeError.error
 }
 
 func (p *Provider) backoffReset() {
@@ -369,9 +372,13 @@ func (p *Provider) run() context.CancelFunc {
 						// if we get canceled() during this,
 						// connect will error out and we go to SessionStatusWaiting
 						if client, err := p.connect(ctx); err != nil {
+							// make a note of the error
+							p.timeError = NewTimeError(err)
 							// not connected
 							statuses <- SessionStatusWaiting
 						} else if response, err := p.handshake(ctx, client); err != nil {
+							// make a note of the error
+							p.timeError = NewTimeError(err)
 							// connect closes client if any error
 							// occured at handshake() except for resp.Authenticated == false
 							statuses <- SessionStatusWaiting
@@ -386,11 +393,15 @@ func (p *Provider) run() context.CancelFunc {
 
 				case SessionStatusConnected:
 					p.sessionStatus = SessionStatusConnected
+					// reset the error
+					p.timeError = NewTimeError(nil)
 					// reset any longer backoff period set by the Disconnect RPC call
 					p.backoffReset()
 					go func(client *client.Client) {
 						// Handle the session
 						if err := p.handleSession(ctx, client); err != nil {
+							// make a note of the error
+							p.timeError = NewTimeError(err)
 							// handleSession will always close client
 							// on errors or if the ctx is canceled().
 							// go to the waiting state
@@ -431,6 +442,9 @@ func (p *Provider) run() context.CancelFunc {
 					if response, err := p.handshake(ctx, cl); err == nil {
 						// reset the ticker
 						tickerReset(time.Now(), response.Expiry, ticker)
+					} else {
+						// make a note of the error
+						p.timeError = NewTimeError(err)
 					}
 				}
 
