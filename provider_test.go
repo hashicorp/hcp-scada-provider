@@ -13,6 +13,7 @@ import (
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
 	"github.com/hashicorp/yamux"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
 	"github.com/hashicorp/hcp-scada-provider/internal/listener"
@@ -478,4 +479,37 @@ func testConn(t *testing.T) (net.Conn, net.Conn) {
 	<-doneCh
 
 	return clientConn, serverConn
+}
+
+func TestPrefixTokenErrorRetrieveError(t *testing.T) {
+	var r = require.New(t)
+
+	var err *oauth2.RetrieveError
+	if err := prefixTokenError("failed to get access token", err); err != nil {
+		r.Equal("ErrInvalidCredentials: failed to get access token: <nil>", err.Error())
+	} else {
+		t.Error("prefixHandshakeError did not return any prefixes error")
+	}
+}
+
+func TestPrefixTokenErrorNil(t *testing.T) {
+	var r = require.New(t)
+
+	var err error
+	if err := prefixTokenError("failed to get access token", err); err != nil {
+		r.Equal("failed to get access token", err.Error())
+	} else {
+		t.Error("prefixHandshakeError did not return any prefixes error")
+	}
+}
+
+func TestPrefixTokenErrorOther(t *testing.T) {
+	var r = require.New(t)
+
+	var err = errTimeErrorUnknown
+	if err := prefixTokenError("failed to get access token", err); err != nil {
+		r.Equal("failed to get access token: testing error", err.Error())
+	} else {
+		t.Error("prefixHandshakeError did not return any prefixes error")
+	}
 }
