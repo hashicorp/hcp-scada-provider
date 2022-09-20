@@ -246,6 +246,14 @@ func (p *Provider) Stop() error {
 }
 
 // SessionStatus returns the status of the SCADA connection.
+//
+// The possibles statuses are:
+//   - SessionStatusDisconnected: the provider is stopped
+//   - SessionStatusConnecting:   in the connect/handshake cycle
+//   - SessionStatusConnected:    connected and serving scada consumers
+//   - SessionStatusWaiting:      disconnected and waiting to retry a connection to the broker
+//
+// The full lifecycle is: connecting -> connected -> waiting -> connecting -> ... -> disconnected.
 func (p *Provider) SessionStatus() SessionStatus {
 	return p.sessionStatus
 }

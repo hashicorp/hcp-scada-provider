@@ -35,7 +35,15 @@ type SCADAProvider interface {
 	// not close the capability listeners.
 	Stop() error
 
-	// SessionStatus will return the status of the SCADA connection.
+	// SessionStatus returns the status of the SCADA connection.
+	//
+	// The possibles statuses are:
+	//   - SessionStatusDisconnected: the provider is stopped
+	//   - SessionStatusConnecting:   in the connect/handshake cycle
+	//   - SessionStatusConnected:    connected and serving scada consumers
+	//   - SessionStatusWaiting:      disconnected and waiting to retry a connection to the broker
+	//
+	// The full lifecycle is: connecting -> connected -> waiting -> connecting -> ... -> disconnected.
 	SessionStatus() SessionStatus
 
 	// LastError returns the last error recorded in the provider
