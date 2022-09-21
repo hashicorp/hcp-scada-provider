@@ -35,7 +35,15 @@ type SCADAProvider interface {
 	// not close the capability listeners.
 	Stop() error
 
-	// SessionStatus will return the status of the SCADA connection.
+	// SessionStatus returns the status of the SCADA connection.
+	//
+	// The possibles statuses are:
+	//   - SessionStatusDisconnected: the provider is stopped
+	//   - SessionStatusConnecting:   in the connect/handshake cycle
+	//   - SessionStatusConnected:    connected and serving scada consumers
+	//   - SessionStatusWaiting:      disconnected and waiting to retry a connection to the broker
+	//
+	// The full lifecycle is: connecting -> connected -> waiting -> connecting -> ... -> disconnected.
 	SessionStatus() SessionStatus
 
 	// LastError returns the last error recorded in the provider
@@ -43,9 +51,11 @@ type SCADAProvider interface {
 	// That record is erased at each occasion when the provider achieves a new connection.
 	//
 	// A few common internal error will return a known type:
-	// * ErrProviderNotStarted: the provider is not started
-	// * ErrInvalidCredentials: could not obtain a token with the supplied credentials
-	// * ErrPermissionDenied: principal does not have the permision to register as a provider (not supported yet)
+	//   - ErrProviderNotStarted: the provider is not started
+	//   - ErrInvalidCredentials: could not obtain a token with the supplied credentials (not supported yet)
+	//   - ErrPermissionDenied:   principal does not have the permision to register as a provider (not supported yet)
+	//
+	// Any other internal error will be returned directly and unchanged.
 	LastError() (time.Time, error)
 }
 
