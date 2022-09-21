@@ -488,7 +488,7 @@ func TestPrefixTokenErrorRetrieveError(t *testing.T) {
 	if err := prefixTokenError("failed to get access token", err); err != nil {
 		r.Equal("ErrInvalidCredentials: failed to get access token: <nil>", err.Error())
 	} else {
-		t.Error("prefixHandshakeError did not return any prefixes error")
+		t.Error("expected a prefixed error")
 	}
 }
 
@@ -499,7 +499,7 @@ func TestPrefixTokenErrorNil(t *testing.T) {
 	if err := prefixTokenError("failed to get access token", err); err != nil {
 		r.Equal("failed to get access token", err.Error())
 	} else {
-		t.Error("prefixHandshakeError did not return any prefixes error")
+		t.Error("expected a prefixed error")
 	}
 }
 
@@ -510,6 +510,6 @@ func TestPrefixTokenErrorOther(t *testing.T) {
 	if err := prefixTokenError("failed to get access token", err); err != nil {
 		r.Equal("failed to get access token: testing error", err.Error())
 	} else {
-		t.Error("prefixHandshakeError did not return any prefixes error")
+		t.Error("expected a prefixed error")
 	}
 }
