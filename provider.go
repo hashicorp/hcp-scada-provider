@@ -256,7 +256,7 @@ func (p *Provider) SessionStatus() SessionStatus {
 //
 // A few common internal error will return a known type:
 // * ErrProviderNotStarted: the provider is not started
-// * ErrInvalidCredentials: could not obtain a token with the supplied credentials (not supported yet)
+// * ErrInvalidCredentials: could not obtain a token with the supplied credentials
 // * ErrPermissionDenied: principal does not have the permision to register as a provider (not supported yet)
 //
 // Any other internal error will be returned directly and unchanged.
@@ -681,7 +681,7 @@ func calculateExpiryFactor(d time.Duration) time.Duration {
 //   err = prefixHandshake("failed to get access token", err)
 //
 // if err is type *oauth2.RetrieveError, prefixHandshakeError would return:
-//   "ErrInvalidCredentials: failed to get access token: %w", err
+//   fmt.Errorf("ErrInvalidCredentials: failed to get access token: %w", err)
 func prefixTokenError(text string, err error) error {
 	var prefix string
 	var e error
