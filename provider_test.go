@@ -513,3 +513,52 @@ func TestPrefixTokenErrorOther(t *testing.T) {
 		t.Error("expected a prefixed error")
 	}
 }
+
+func TestProviderSetupRetrieveError(t *testing.T) {
+	require := require.New(t)
+	addr, list := testListener(t)
+	defer list.Close()
+
+	config := testProviderConfig()
+	// Get a HCP config that has a mock oauth2 Token function that always returns *oauth2.RetrieveError
+	config.HCPConfig = test.NewStaticHCPConfigErrorTokenSource(addr, false, &oauth2.RetrieveError{})
+
+	p, err := construct(config)
+	require.NoError(err)
+
+	require.Equal(SessionStatusDisconnected, p.SessionStatus())
+
+	err = p.Start()
+	require.NoError(err)
+	defer p.Stop()
+
+	require.Equal(SessionStatusConnecting, p.SessionStatus())
+
+	_, err = p.Listen("foo")
+	require.NoError(err)
+
+	conn, err := list.Accept()
+	defer conn.Close()
+	require.NoError(err)
+
+	preamble := make([]byte, len(client.ClientPreamble))
+	n, err := conn.Read(preamble)
+	require.NoError(err)
+	require.Len(preamble, n)
+
+	server, _ := yamux.Server(conn, yamux.DefaultConfig())
+	server.Accept()
+
+	// wait until the provider disconnects because of the oauth2 error
+	require.Eventually(func() bool {
+		if p.SessionStatus() == SessionStatusWaiting {
+			return true
+		}
+		return false
+	}, 1*time.Second, 10*time.Millisecond)
+
+	// at this point, last error should be ErrInvalidCredentials
+	if _, err := p.LastError(); err != ErrInvalidCredentials {
+		t.Errorf("expected error ErrInvalidCredentials and got %v", err)
+	}
+}
