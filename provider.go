@@ -466,7 +466,7 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *
 	oauthToken, err = p.config.HCPConfig.Token()
 	if err != nil {
 		client.Close()
-		err = prefixTokenError("failed to get access token", err)
+		err = PrefixError("failed to get access token", err)
 		return nil, err
 	}
 
@@ -681,42 +681,6 @@ func calculateExpiryFactor(d time.Duration) time.Duration {
 	var factored = seconds * expiryFactor
 	d = time.Duration(factored) * time.Second
 	return d
-}
-
-// prefixTokenError prefixes err with prefixes from ErrorPrefixes depending on the type of err, and then adds text.
-//
-// the classic example is:
-//   err = prefixHandshake("failed to get access token", err)
-//
-// if err is type *oauth2.RetrieveError, prefixHandshakeError would return:
-//   fmt.Errorf("ErrInvalidCredentials: failed to get access token: %w", err)
-func prefixTokenError(text string, err error) error {
-	var prefix string
-	var e error
-
-	switch err.(type) {
-	case *oauth2.RetrieveError:
-		prefix = ErrorPrefixes[ErrInvalidCredentials]
-	}
-	if prefix != "" {
-		e = fmt.Errorf("%s", prefix)
-	}
-	if text != "" {
-		if e != nil {
-			e = fmt.Errorf("%v: %s", e, text)
-		} else {
-			e = fmt.Errorf("%s", text)
-		}
-	}
-	if err != nil {
-		if e != nil {
-			e = fmt.Errorf("%v: %w", e, err)
-		} else {
-			e = err
-		}
-	}
-
-	return e
 }
 
 var _ SCADAProvider = &Provider{}

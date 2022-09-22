@@ -481,39 +481,6 @@ func testConn(t *testing.T) (net.Conn, net.Conn) {
 	return clientConn, serverConn
 }
 
-func TestPrefixTokenErrorRetrieveError(t *testing.T) {
-	var r = require.New(t)
-
-	var err *oauth2.RetrieveError
-	if err := prefixTokenError("failed to get access token", err); err != nil {
-		r.Equal("ErrInvalidCredentials: failed to get access token: <nil>", err.Error())
-	} else {
-		t.Error("expected a prefixed error")
-	}
-}
-
-func TestPrefixTokenErrorNil(t *testing.T) {
-	var r = require.New(t)
-
-	var err error
-	if err := prefixTokenError("failed to get access token", err); err != nil {
-		r.Equal("failed to get access token", err.Error())
-	} else {
-		t.Error("expected a prefixed error")
-	}
-}
-
-func TestPrefixTokenErrorOther(t *testing.T) {
-	var r = require.New(t)
-
-	var err = errTimeErrorUnknown
-	if err := prefixTokenError("failed to get access token", err); err != nil {
-		r.Equal("failed to get access token: testing error", err.Error())
-	} else {
-		t.Error("expected a prefixed error")
-	}
-}
-
 func TestProviderSetupRetrieveError(t *testing.T) {
 	require := require.New(t)
 	addr, list := testListener(t)

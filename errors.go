@@ -2,8 +2,11 @@ package provider
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
+
+	"golang.org/x/oauth2"
 )
 
 var (
@@ -85,4 +88,45 @@ func NewTimeError(err error) timeError {
 		Time:  time.Now(),
 		error: err,
 	}
+}
+
+// PrefixError prefixes a known err errors with prefixes from ErrorPrefixes,
+// depending on the type of err. It then adds text.
+//
+// Supported error to prefix maps are:
+//   - *oauth2.RetrieveError maps to ErrInvalidCredentials
+//
+// A classic example would look like this:
+//
+//	func Prefix() {
+// 		err := PrefixError("failed to get access token", &oauth2.RetrieveError{})
+// 		fmt.Printf("%v", err) // "ErrInvalidCredentials: failed to get access token: %w"
+//	}
+func PrefixError(text string, err error) error {
+	var prefix string
+	var e error
+
+	switch err.(type) {
+	case *oauth2.RetrieveError:
+		prefix = ErrorPrefixes[ErrInvalidCredentials]
+	}
+	if prefix != "" {
+		e = fmt.Errorf("%s", prefix)
+	}
+	if text != "" {
+		if e != nil {
+			e = fmt.Errorf("%v: %s", e, text)
+		} else {
+			e = fmt.Errorf("%s", text)
+		}
+	}
+	if err != nil {
+		if e != nil {
+			e = fmt.Errorf("%v: %w", e, err)
+		} else {
+			e = err
+		}
+	}
+
+	return e
 }
