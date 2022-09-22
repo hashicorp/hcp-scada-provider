@@ -5,9 +5,10 @@ import (
 	"crypto/tls"
 	"net/url"
 
-	sdk "github.com/hashicorp/hcp-sdk-go/config"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
+
+	sdk "github.com/hashicorp/hcp-sdk-go/config"
 )
 
 // NewStaticHCPConfig creates an instance of HCPConfig using provided endpoint and TLS setting. If TLS is enabled it
@@ -26,6 +27,13 @@ func NewStaticHCPConfig(scadaEndpoint string, useTLS bool) *staticHCPConfig {
 		scadaTLSConfig: tlsConfig,
 		tokenSource:    staticTokenSource{},
 	}
+}
+
+// NewStaticHCPConfigErrorTokenSource is the same as NewStaticHCPConfig but has a token source that always returns err
+func NewStaticHCPConfigErrorTokenSource(scadaEndpoint string, useTLS bool, err error) *staticHCPConfig {
+	config := NewStaticHCPConfig(scadaEndpoint, useTLS)
+	config.tokenSource = ErrorTokenSource{error: err}
+	return config
 }
 
 // NewStaticHCPCloudDevConfig will return a static configuration that is configured with cloud-dev's Traefik SCADA port.
@@ -79,6 +87,16 @@ type staticTokenSource struct {
 
 func (s staticTokenSource) Token() (*oauth2.Token, error) {
 	return &oauth2.Token{AccessToken: s.accesstoken}, nil
+}
+
+// ErrorTokenSource is an implementation of an oauth2 token source
+// that always returns an error when its Token() function is called.
+type ErrorTokenSource struct {
+	error
+}
+
+func (m ErrorTokenSource) Token() (*oauth2.Token, error) {
+	return nil, m.error
 }
 
 var _ sdk.HCPConfig = &staticHCPConfig{}

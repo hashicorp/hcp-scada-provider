@@ -52,7 +52,7 @@ type SCADAProvider interface {
 	//
 	// A few common internal error will return a known type:
 	//   - ErrProviderNotStarted: the provider is not started
-	//   - ErrInvalidCredentials: could not obtain a token with the supplied credentials (not supported yet)
+	//   - ErrInvalidCredentials: could not obtain a token with the supplied credentials
 	//   - ErrPermissionDenied:   principal does not have the permision to register as a provider (not supported yet)
 	//
 	// Any other internal error will be returned directly and unchanged.

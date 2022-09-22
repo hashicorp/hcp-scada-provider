@@ -264,7 +264,7 @@ func (p *Provider) SessionStatus() SessionStatus {
 //
 // A few common internal error will return a known type:
 //   - ErrProviderNotStarted: the provider is not started
-//   - ErrInvalidCredentials: could not obtain a token with the supplied credentials (not supported yet)
+//   - ErrInvalidCredentials: could not obtain a token with the supplied credentials
 //   - ErrPermissionDenied:   principal does not have the permision to register as a provider (not supported yet)
 //
 // Any other internal error will be returned directly and unchanged.
@@ -442,7 +442,11 @@ func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 	return client, nil
 }
 
-// handshake does the initial handshake.
+// handshake does the initial handshake. Handshake will return prefixed errors in certain scenarios:
+//   - if HCPConfig.Token() returns *oauth2.RetrieveError, it will prefix the error with ErrInvalidCredentials
+//   - client.RPC("Session.Handshake") might prefix the error with ErrPermissionDenied
+//
+// The prefixes are processed in NewTimeError called from the run() loop.
 func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *types.HandshakeResponse, err error) {
 	defer func() {
 		if err != nil {
@@ -462,7 +466,7 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *
 	oauthToken, err = p.config.HCPConfig.Token()
 	if err != nil {
 		client.Close()
-		err = fmt.Errorf("failed to get access token: %w", err)
+		err = PrefixError("failed to get access token", err)
 		return nil, err
 	}
 

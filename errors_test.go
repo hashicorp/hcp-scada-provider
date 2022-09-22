@@ -2,10 +2,12 @@ package provider
 
 import (
 	"errors"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 )
 
 var (
@@ -71,4 +73,41 @@ func TestNewTimeErrorErrorNil(t *testing.T) {
 
 	te := NewTimeError(nil)
 	r.Equal("", te.Error())
+}
+
+func TestPrefixErrorRetrieveError(t *testing.T) {
+	var r = require.New(t)
+
+	var err *oauth2.RetrieveError = &oauth2.RetrieveError{
+		Response: &http.Response{
+			StatusCode: http.StatusUnauthorized,
+		},
+	}
+	if err := PrefixError("failed to get access token", err); err != nil {
+		r.Equal("ErrInvalidCredentials: failed to get access token: oauth2: cannot fetch token: \nResponse: ", err.Error())
+	} else {
+		t.Error("expected a prefixed error")
+	}
+}
+
+func TestPrefixErrorNil(t *testing.T) {
+	var r = require.New(t)
+
+	var err error
+	if err := PrefixError("failed to get access token", err); err != nil {
+		r.Equal("failed to get access token", err.Error())
+	} else {
+		t.Error("expected a prefixed error")
+	}
+}
+
+func TestPrefixErrorOther(t *testing.T) {
+	var r = require.New(t)
+
+	var err = errTimeErrorUnknown
+	if err := PrefixError("failed to get access token", err); err != nil {
+		r.Equal("failed to get access token: testing error", err.Error())
+	} else {
+		t.Error("expected a prefixed error")
+	}
 }
