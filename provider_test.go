@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"net/rpc"
 	"testing"
 	"time"
@@ -488,7 +489,11 @@ func TestProviderSetupRetrieveError(t *testing.T) {
 
 	config := testProviderConfig()
 	// Get a HCP config that has a mock oauth2 Token function that always returns *oauth2.RetrieveError
-	config.HCPConfig = test.NewStaticHCPConfigErrorTokenSource(addr, false, &oauth2.RetrieveError{})
+	config.HCPConfig = test.NewStaticHCPConfigErrorTokenSource(addr, false, &oauth2.RetrieveError{
+		Response: &http.Response{
+			StatusCode: http.StatusUnauthorized,
+		},
+	})
 
 	p, err := construct(config)
 	require.NoError(err)
@@ -525,7 +530,7 @@ func TestProviderSetupRetrieveError(t *testing.T) {
 	}, 1*time.Second, 10*time.Millisecond)
 
 	// at this point, last error should be ErrInvalidCredentials
-	if _, err := p.LastError(); err != ErrInvalidCredentials {
-		t.Errorf("expected error ErrInvalidCredentials and got %v", err)
-	}
+	_, err = p.LastError()
+	require.Error(err)
+	require.Equal(ErrInvalidCredentials, err)
 }

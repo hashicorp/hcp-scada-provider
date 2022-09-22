@@ -3,6 +3,7 @@ package provider
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -94,7 +95,7 @@ func NewTimeError(err error) timeError {
 // depending on the type of err. It then adds text.
 //
 // Supported error to prefix maps are:
-//   - *oauth2.RetrieveError maps to ErrInvalidCredentials
+//   - *oauth2.RetrieveError maps to ErrInvalidCredentials if RetrieveError.StatusCode == 401
 //
 // A classic example would look like this:
 //
@@ -106,9 +107,11 @@ func PrefixError(text string, err error) error {
 	var prefix string
 	var e error
 
-	switch err.(type) {
+	switch v := err.(type) {
 	case *oauth2.RetrieveError:
-		prefix = ErrorPrefixes[ErrInvalidCredentials]
+		if v != nil && v.Response != nil && v.Response.StatusCode == http.StatusUnauthorized {
+			prefix = ErrorPrefixes[ErrInvalidCredentials]
+		}
 	}
 	if prefix != "" {
 		e = fmt.Errorf("%s", prefix)

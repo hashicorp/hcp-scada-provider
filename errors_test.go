@@ -2,6 +2,7 @@ package provider
 
 import (
 	"errors"
+	"net/http"
 	"testing"
 	"time"
 
@@ -77,9 +78,13 @@ func TestNewTimeErrorErrorNil(t *testing.T) {
 func TestPrefixErrorRetrieveError(t *testing.T) {
 	var r = require.New(t)
 
-	var err *oauth2.RetrieveError
+	var err *oauth2.RetrieveError = &oauth2.RetrieveError{
+		Response: &http.Response{
+			StatusCode: http.StatusUnauthorized,
+		},
+	}
 	if err := PrefixError("failed to get access token", err); err != nil {
-		r.Equal("ErrInvalidCredentials: failed to get access token: <nil>", err.Error())
+		r.Equal("ErrInvalidCredentials: failed to get access token: oauth2: cannot fetch token: \nResponse: ", err.Error())
 	} else {
 		t.Error("expected a prefixed error")
 	}
