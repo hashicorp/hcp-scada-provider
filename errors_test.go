@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -88,6 +90,19 @@ func TestPrefixErrorRetrieveError(t *testing.T) {
 	}
 	if err := PrefixError("failed to get access token", err); err != nil {
 		r.True(strings.HasPrefix(err.Error(), ErrorPrefixes[ErrInvalidCredentials]))
+	} else {
+		t.Error("expected a prefixed error")
+	}
+}
+
+// TestPrefixErrorRetrieveError checks that the grpc *status.Status error
+// is processed correctly.
+func TestPrefixErrorGRPCStatus(t *testing.T) {
+	var r = require.New(t)
+
+	var err = status.Error(codes.PermissionDenied, "")
+	if err := PrefixError("authz permission denied", err); err != nil {
+		r.True(strings.HasPrefix(err.Error(), ErrorPrefixes[ErrPermissionDenied]))
 	} else {
 		t.Error("expected a prefixed error")
 	}

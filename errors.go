@@ -100,6 +100,7 @@ func NewTimeError(err error) timeError {
 //
 // Supported error to prefix maps are:
 //   - *oauth2.RetrieveError maps to ErrInvalidCredentials if RetrieveError.StatusCode == 401
+//   - grpc *status.Status maps to ErrPermissionDenied if Status.Code == codes.PermissionDenied
 //
 // A classic example would look like this:
 //
