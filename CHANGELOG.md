@@ -3,3 +3,13 @@ This file will contain all notable changes to this repository. Any new releases 
 
 ## 0.1.0 (September 9 2022)
 First version of the library containing capability to connect to SCADA broker as SCADA provider using HCP identity.
+
+## 0.1.1 (September 22 2022)
+Minor update mainly for the new scada hostname.
+
+### Changed
+- Updated to hcp-sdk-go v0.23.0 to get the new scada public address
+
+### Added
+- Documented the `SessionStatus` function with better descriptions of the possible statuses
+- Support for the `ErrInvalidCredentials` error in the `LastError` function
