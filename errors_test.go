@@ -3,6 +3,7 @@ package provider
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ func TestNewTimeErrorUnknown(t *testing.T) {
 	r.Equal(errTimeErrorUnknown, te.error)
 }
 
-// TestNewTimeErrorBase checks the standard behavior of timeError.
+// TestNewTimeErrorKnown checks the standard behavior of timeError.
 // creating a new timeError with an unknown value and checking it's value.
 func TestNewTimeErrorKnown(t *testing.T) {
 	var r = require.New(t)
@@ -75,6 +76,8 @@ func TestNewTimeErrorErrorNil(t *testing.T) {
 	r.Equal("", te.Error())
 }
 
+// TestPrefixErrorRetrieveError checks that the *oauth2.RetrieveError error
+// is processed correctly.
 func TestPrefixErrorRetrieveError(t *testing.T) {
 	var r = require.New(t)
 
@@ -84,7 +87,7 @@ func TestPrefixErrorRetrieveError(t *testing.T) {
 		},
 	}
 	if err := PrefixError("failed to get access token", err); err != nil {
-		r.Equal("ErrInvalidCredentials: failed to get access token: oauth2: cannot fetch token: \nResponse: ", err.Error())
+		r.True(strings.HasPrefix(err.Error(), ErrorPrefixes[ErrInvalidCredentials]))
 	} else {
 		t.Error("expected a prefixed error")
 	}

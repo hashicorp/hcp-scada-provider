@@ -94,7 +94,9 @@ func NewTimeError(err error) timeError {
 }
 
 // PrefixError prefixes a known err errors with prefixes from ErrorPrefixes,
-// depending on the type of err. It then adds text.
+// depending on the type of err. It then adds text. If it does not find a prefix in err,
+// it will just process text and err into fmt.Errorf("%s: %w", text, err). If text is
+// not specified, it will return ther equivalent of just err.
 //
 // Supported error to prefix maps are:
 //   - *oauth2.RetrieveError maps to ErrInvalidCredentials if RetrieveError.StatusCode == 401
