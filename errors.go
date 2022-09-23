@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -111,6 +113,10 @@ func PrefixError(text string, err error) error {
 	case *oauth2.RetrieveError:
 		if v != nil && v.Response != nil && v.Response.StatusCode == http.StatusUnauthorized {
 			prefix = ErrorPrefixes[ErrInvalidCredentials]
+		}
+	case interface{ GRPCStatus() *status.Status }:
+		if v != nil && v.GRPCStatus().Code() == codes.PermissionDenied {
+			prefix = ErrorPrefixes[ErrPermissionDenied]
 		}
 	}
 	if prefix != "" {
