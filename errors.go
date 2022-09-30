@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -91,11 +93,14 @@ func NewTimeError(err error) timeError {
 	}
 }
 
-// PrefixError prefixes a known err errors with prefixes from ErrorPrefixes,
-// depending on the type of err. It then adds text.
+// PrefixError prefixes a known err error with prefixes from ErrorPrefixes,
+// depending on the type of err. It then adds text. If it does not find a prefix in err,
+// it will just process text and err into fmt.Errorf("%s: %w", text, err). If text is
+// not specified, it will return the equivalent of just err.
 //
 // Supported error to prefix maps are:
 //   - *oauth2.RetrieveError maps to ErrInvalidCredentials if RetrieveError.StatusCode == 401
+//   - grpc *status.Status maps to ErrPermissionDenied if Status.Code == codes.PermissionDenied
 //
 // A classic example would look like this:
 //
@@ -111,6 +116,10 @@ func PrefixError(text string, err error) error {
 	case *oauth2.RetrieveError:
 		if v != nil && v.Response != nil && v.Response.StatusCode == http.StatusUnauthorized {
 			prefix = ErrorPrefixes[ErrInvalidCredentials]
+		}
+	case interface{ GRPCStatus() *status.Status }:
+		if v != nil && v.GRPCStatus().Code() == codes.PermissionDenied {
+			prefix = ErrorPrefixes[ErrPermissionDenied]
 		}
 	}
 	if prefix != "" {
