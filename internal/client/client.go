@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
+	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc/v2"
 	"github.com/hashicorp/yamux"
 
 	"github.com/hashicorp/hcp-scada-provider/internal/client/dialer"
