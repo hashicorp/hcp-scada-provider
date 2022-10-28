@@ -11,7 +11,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	cloud "github.com/hashicorp/hcp-sdk-go/clients/cloud-shared/v1/models"
-	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
+	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc/v2"
 	"github.com/hashicorp/yamux"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
