@@ -13,3 +13,8 @@ Minor update mainly for the new scada hostname.
 ### Added
 - Documented the `SessionStatus` function with better descriptions of the possible statuses
 - Support for the `ErrInvalidCredentials` error in the `LastError` function
+
+## 0.2.0 (October 28 2022)
+
+### Changed
+- Updated `net-rpc-msgpackrp` to `v2` to address a diamond dependency problem for projects importing hcp-scada-provider and an older version of hashicorp/go-msgpack

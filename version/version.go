@@ -1,4 +1,4 @@
 package version
 
 // Version is the current version of the library
-var Version = "0.1.1"
+var Version = "0.2.0"
