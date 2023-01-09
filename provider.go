@@ -73,13 +73,13 @@ type Provider struct {
 	running     bool
 	runningLock sync.Mutex
 
-	sessionStatus SessionStatus
+	sessionStatuses chan SessionStatus
 
 	actions chan action
 
 	cancel context.CancelFunc
 
-	lastError timeError
+	lastErrors chan timeError
 }
 
 // New creates a new SCADA provider instance using the configuration in config.
@@ -106,13 +106,13 @@ func construct(config *Config) (*Provider, error) {
 	}
 
 	p := &Provider{
-		config:        config,
-		logger:        config.Logger.Named("scada-provider"),
-		meta:          map[string]string{},
-		handlers:      map[string]handler{},
-		sessionStatus: SessionStatusDisconnected,
-		actions:       make(chan action),
-		lastError:     NewTimeError(ErrProviderNotStarted),
+		config:          config,
+		logger:          config.Logger.Named("scada-provider"),
+		meta:            map[string]string{},
+		handlers:        map[string]handler{},
+		sessionStatuses: make(chan SessionStatus),
+		actions:         make(chan action),
+		lastErrors:      make(chan timeError),
 	}
 
 	return p, nil
@@ -255,7 +255,16 @@ func (p *Provider) Stop() error {
 //
 // The full lifecycle is: connecting -> connected -> waiting -> connecting -> ... -> disconnected.
 func (p *Provider) SessionStatus() SessionStatus {
-	return p.sessionStatus
+	p.runningLock.Lock()
+	defer p.runningLock.Unlock()
+
+	// Check if the provider is running
+	if !p.running {
+		return SessionStatusDisconnected
+	}
+
+	// get the status from the run() loop
+	return <-p.sessionStatuses
 }
 
 // LastError returns the last error recorded in the provider
@@ -269,15 +278,25 @@ func (p *Provider) SessionStatus() SessionStatus {
 //
 // Any other internal error will be returned directly and unchanged.
 func (p *Provider) LastError() (time.Time, error) {
-	return p.lastError.Time, p.lastError.error
+	p.runningLock.Lock()
+	defer p.runningLock.Unlock()
+
+	// Check if the provider is running
+	if !p.running {
+		return time.Now(), ErrProviderNotStarted
+	}
+
+	lastError := <-p.lastErrors
+	return lastError.Time, lastError.error
 }
 
 /////
 
 // run is a long running routine to manage the provider.
 func (p *Provider) run() context.CancelFunc {
-	// setup a statuses channel to communicate with ourselves
+	// setup a statuses and errors channel to communicate with ourselves
 	var statuses = make(chan SessionStatus)
+	var errors = make(chan error)
 
 	// setup a ticker for session's expiry
 	var ticker = time.NewTicker(expiryDefault)
@@ -292,15 +311,26 @@ func (p *Provider) run() context.CancelFunc {
 	go func() {
 		defer cancel()
 		var cl *client.Client
-		// clear the lastError
-		p.lastError = NewTimeError(nil)
+		// locally hold the current session status so we can communicate it
+		var sessionStatus SessionStatus = SessionStatusDisconnected
+		// locally hold the last error so we can communicate it
+		var lastError timeError = NewTimeError(nil)
+
 		// engage in running the provider
 		for {
 			select {
+			case p.sessionStatuses <- sessionStatus:
+				// p.SessionStatus() was waiting to read
+			case p.lastErrors <- lastError:
+				// p.LastError() was waiting to read
+			case err := <-errors:
+				// async receive an error from one of the handlers
+				lastError = NewTimeError(err)
+
 			case status := <-statuses:
 				switch status {
 				case SessionStatusWaiting:
-					p.sessionStatus = SessionStatusWaiting
+					sessionStatus = SessionStatusWaiting
 					// backoff
 					go func() {
 						if err := p.wait(ctx); err != nil {
@@ -313,19 +343,19 @@ func (p *Provider) run() context.CancelFunc {
 					}()
 
 				case SessionStatusConnecting:
-					p.sessionStatus = SessionStatusConnecting
+					sessionStatus = SessionStatusConnecting
 					// Try to connect a session
 					go func() {
 						// if we get canceled() during this,
 						// connect will error out and we go to SessionStatusWaiting
 						if client, err := p.connect(ctx); err != nil {
 							// make a note of the error
-							p.lastError = NewTimeError(err)
+							errors <- err
 							// not connected
 							statuses <- SessionStatusWaiting
 						} else if response, err := p.handshake(ctx, client); err != nil {
 							// make a note of the error
-							p.lastError = NewTimeError(err)
+							errors <- err
 							// connect closes client if any error
 							// occured at handshake() except for resp.Authenticated == false
 							statuses <- SessionStatusWaiting
@@ -339,16 +369,16 @@ func (p *Provider) run() context.CancelFunc {
 					}()
 
 				case SessionStatusConnected:
-					p.sessionStatus = SessionStatusConnected
+					sessionStatus = SessionStatusConnected
 					// reset the error
-					p.lastError = NewTimeError(nil)
+					lastError = NewTimeError(nil)
 					// reset any longer backoff period set by the Disconnect RPC call
 					p.backoffReset()
 					go func(client *client.Client) {
 						// Handle the session
 						if err := p.handleSession(ctx, client); err != nil {
 							// make a note of the error
-							p.lastError = NewTimeError(err)
+							errors <- err
 							// handleSession will always close client
 							// on errors or if the ctx is canceled().
 							// go to the waiting state
@@ -357,7 +387,7 @@ func (p *Provider) run() context.CancelFunc {
 					}(cl)
 
 				case SessionStatusDisconnected:
-					p.sessionStatus = SessionStatusDisconnected
+					sessionStatus = SessionStatusDisconnected
 					// after officially disconnecting, reset the backoff period for this provider
 					p.backoffReset()
 					close(done)
@@ -373,7 +403,7 @@ func (p *Provider) run() context.CancelFunc {
 			case action := <-p.actions:
 				// if sessionStatus is not SessionStatusConnected,
 				// none of these actions can proceed
-				if p.sessionStatus != SessionStatusConnected {
+				if sessionStatus != SessionStatusConnected {
 					continue
 				}
 
@@ -391,7 +421,7 @@ func (p *Provider) run() context.CancelFunc {
 						tickerReset(time.Now(), response.Expiry, ticker)
 					} else {
 						// make a note of the error
-						p.lastError = NewTimeError(err)
+						lastError = NewTimeError(err)
 					}
 				}
 
@@ -412,7 +442,6 @@ func (p *Provider) run() context.CancelFunc {
 				}()
 
 			case <-ret:
-				p.lastError = NewTimeError(ErrProviderNotStarted)
 				return
 				// ¯\_(ツ)_/¯
 			}
