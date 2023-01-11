@@ -5,7 +5,7 @@ This file will contain all notable changes to this repository. Any new releases 
 Minor maintenance release.
 
 ### Fixed
-- Two of the accessors (`LastError` & `SessionStatus`) had a datarace
+- Two of the accessors (`LastError` & `SessionStatus`) had a data race
 
 ### Changed
 - Added data race detection to the github workflow
