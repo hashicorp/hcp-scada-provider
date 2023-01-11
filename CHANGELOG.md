@@ -18,3 +18,12 @@ Minor update mainly for the new scada hostname.
 
 ### Changed
 - Updated `net-rpc-msgpackrp` to `v2` to address a diamond dependency problem for projects importing hcp-scada-provider and an older version of hashicorp/go-msgpack
+
+## 0.2.1 (January 11 2023)
+Minor maintenance release.
+
+### Fixed
+- Two of the accessors (`LastError` & `SessionStatus`) had a datarace
+
+### Changed
+- Added data race detection to the github workflow
