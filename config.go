@@ -34,22 +34,22 @@ type Config struct {
 
 func (c *Config) Validate() error {
 	if c == nil {
-		return fmt.Errorf("missing config")
+		return fmt.Errorf("failed to initialize SCADA provider: missing config")
 	}
 
 	if c.Service == "" {
-		return fmt.Errorf("missing Service")
+		return fmt.Errorf("failed to initialize SCADA provider: missing Service")
 	}
 
 	err := resource.Validate(c.Resource)
 	if err != nil {
-		return fmt.Errorf("resource is invalid: %w", err)
+		return fmt.Errorf("failed to initialize SCADA provider: %w", err)
 	}
 	if c.HCPConfig == nil {
-		return fmt.Errorf("missing HCPConfig")
+		return fmt.Errorf("failed to initialize SCADA provider: HCPConfig must be provided")
 	}
 	if c.Logger == nil {
-		return fmt.Errorf("missing Logger")
+		return fmt.Errorf("failed to initialize SCADA provider: Logger must be provided")
 	}
 
 	return nil

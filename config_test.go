@@ -47,28 +47,28 @@ func TestConfig_Invalid(t *testing.T) {
 			mutate: func(config *Config) {
 				config.Service = ""
 			},
-			expectedError: "missing Service",
+			expectedError: "failed to initialize SCADA provider: missing Service",
 		},
 		{
 			name: "invalid resource",
 			mutate: func(config *Config) {
 				config.Resource.ID = ""
 			},
-			expectedError: "resource is invalid: missing resource ID",
+			expectedError: "failed to initialize SCADA provider: missing resource ID",
 		},
 		{
 			name: "missing HCP Config",
 			mutate: func(config *Config) {
 				config.HCPConfig = nil
 			},
-			expectedError: "missing HCPConfig",
+			expectedError: "failed to initialize SCADA provider: HCPConfig must be provided",
 		},
 		{
 			name: "missing Logger",
 			mutate: func(config *Config) {
 				config.Logger = nil
 			},
-			expectedError: "missing Logger",
+			expectedError: "failed to initialize SCADA provider: Logger must be provided",
 		},
 	}
 
