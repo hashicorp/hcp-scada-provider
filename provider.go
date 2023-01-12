@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"math/rand"
 	"net"
@@ -20,7 +19,6 @@ import (
 	"github.com/hashicorp/hcp-scada-provider/internal/client"
 	"github.com/hashicorp/hcp-scada-provider/internal/client/dialer/tcp"
 	"github.com/hashicorp/hcp-scada-provider/internal/listener"
-	"github.com/hashicorp/hcp-scada-provider/internal/resource"
 	"github.com/hashicorp/hcp-scada-provider/types"
 )
 
@@ -83,24 +81,7 @@ type Provider struct {
 }
 
 // New creates a new SCADA provider instance using the configuration in config.
-func New(config *Config) (SCADAProvider, error) {
-	if config.Logger == nil {
-		return nil, fmt.Errorf("failed to initialize SCADA provider: Logger must be provided")
-	}
-	if config.HCPConfig == nil {
-		return nil, fmt.Errorf("failed to initialize SCADA provider: HCPConfig must be provided")
-	}
-	err := resource.Validate(config.Resource)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize SCADA provider: %w", err)
-	}
-
-	return construct(config)
-
-}
-
-// construct is used to create a new provider.
-func construct(config *Config) (*Provider, error) {
+func New(config *Config) (*Provider, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
@@ -108,8 +89,8 @@ func construct(config *Config) (*Provider, error) {
 	p := &Provider{
 		config:          config,
 		logger:          config.Logger.Named("scada-provider"),
-		meta:            map[string]string{},
-		handlers:        map[string]handler{},
+		meta:            make(map[string]string),
+		handlers:        make(map[string]handler),
 		sessionStatuses: make(chan SessionStatus),
 		actions:         make(chan action),
 		lastErrors:      make(chan timeError),
@@ -118,15 +99,48 @@ func construct(config *Config) (*Provider, error) {
 	return p, nil
 }
 
-// UpdateMeta updates the internal map of meta-data values
-// and performs a rehandshake to update the broker with the new values.
+// UpdateMeta overwrites the internal map of meta-data values
+// and performs a re-handshake to update the remote broker.
 func (p *Provider) UpdateMeta(m map[string]string) {
 	p.metaLock.Lock()
 	defer p.metaLock.Unlock()
 
+	// reset the current metadata
+	p.meta = make(map[string]string, len(m))
+
 	// Update the map
 	for k, v := range m {
 		p.meta[k] = v
+	}
+
+	// tell the run loop to re-handshake and update the broker
+	p.action(actionRehandshake)
+}
+
+// AddMeta upserts keys and values in the internal map of meta-data
+// and performs a re-handshake to update the remote broker.
+func (p *Provider) AddMeta(metas ...Meta) {
+	p.metaLock.Lock()
+	defer p.metaLock.Unlock()
+
+	// Update the map
+	for _, v := range metas {
+		p.meta[v.Key] = v.Value
+	}
+
+	// tell the run loop to re-handshake and update the broker
+	p.action(actionRehandshake)
+}
+
+// DeleteMeta delete keys from the meta-date values and then perform a
+// re-handshake to update the remote broker.
+func (p *Provider) DeleteMeta(keys ...string) {
+	p.metaLock.Lock()
+	defer p.metaLock.Unlock()
+
+	// Update the map
+	for _, v := range keys {
+		delete(p.meta, v)
 	}
 
 	// tell the run loop to re-handshake and update the broker
@@ -711,5 +725,3 @@ func calculateExpiryFactor(d time.Duration) time.Duration {
 	d = time.Duration(factored) * time.Second
 	return d
 }
-
-var _ SCADAProvider = &Provider{}
