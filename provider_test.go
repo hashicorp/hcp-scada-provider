@@ -36,6 +36,14 @@ func (p *Provider) isStopped() bool {
 	return !p.running
 }
 
+func TestProviderImplementsSCADAProvider(t *testing.T) {
+	r := require.New(t)
+
+	var givenProvider SCADAProvider
+	givenProvider, _ = New(testProviderConfig())
+	r.NotNil(givenProvider)
+}
+
 func TestSCADAProvider(t *testing.T) {
 	t.Run("SCADA provider initialization fails if no Logger is provided", func(t *testing.T) {
 		_, err := New(&Config{
@@ -179,7 +187,7 @@ func TestProvider_StartStop(t *testing.T) {
 	require := require.New(t)
 
 	// Create the provider, it should be stopped
-	p, err := construct(testProviderConfig())
+	p, err := New(testProviderConfig())
 	require.NoError(err)
 	require.True(p.isStopped())
 
@@ -216,7 +224,7 @@ func TestProvider_StartStop(t *testing.T) {
 
 func TestProvider_backoff(t *testing.T) {
 	require := require.New(t)
-	p, err := construct(testProviderConfig())
+	p, err := New(testProviderConfig())
 	require.NoError(err)
 
 	err = p.Start()
@@ -295,7 +303,7 @@ func TestProvider_Setup(t *testing.T) {
 	config := testProviderConfig()
 	config.HCPConfig = test.NewStaticHCPConfig(addr, false)
 
-	p, err := construct(config)
+	p, err := New(config)
 	require.NoError(err)
 
 	require.Equal(SessionStatusDisconnected, p.SessionStatus())
@@ -342,8 +350,9 @@ func TestProvider_Setup(t *testing.T) {
 func TestProvider_ListenerStop(t *testing.T) {
 	require := require.New(t)
 
+	var givenProvider SCADAProvider
 	givenCapability := "foo"
-	givenProvider, _ := New(testProviderConfig())
+	givenProvider, _ = New(testProviderConfig())
 	givenListener, _ := givenProvider.Listen(givenCapability)
 
 	err := givenListener.Close()
@@ -376,7 +385,7 @@ func TestProvider_Connect(t *testing.T) {
 	require := require.New(t)
 	config := testProviderConfig()
 
-	p, err := construct(config)
+	p, err := New(config)
 	p.handlers["foo"] = handler{
 		provider: fooCapability(t),
 	}
@@ -422,7 +431,7 @@ func TestProvider_Disconnect(t *testing.T) {
 	const testBackoff = 300 * time.Second
 	require := require.New(t)
 	config := testProviderConfig()
-	p, err := construct(config)
+	p, err := New(config)
 	require.NoError(err)
 
 	err = p.Start()
@@ -495,7 +504,7 @@ func TestProviderSetupRetrieveError(t *testing.T) {
 		},
 	})
 
-	p, err := construct(config)
+	p, err := New(config)
 	require.NoError(err)
 
 	require.Equal(SessionStatusDisconnected, p.SessionStatus())

@@ -7,9 +7,17 @@ import (
 
 // SCADAProvider allows to expose services via SCADA capabilities.
 type SCADAProvider interface {
-	// UpdateMeta updates the internal map of meta-data values
-	// and performs a rehandshake to update the broker with the new values.
+	// UpdateMeta overwrites the internal map of meta-data values
+	// and performs a re-handshake to update the remote broker.
 	UpdateMeta(map[string]string)
+
+	// AddMeta upserts keys and values in the internal map of meta-data
+	// and performs a re-handshake to update the remote broker.
+	AddMeta(...Meta)
+
+	// DeleteMeta delete keys from the meta-date values and then perform a
+	// re-handshake to update the remote broker.
+	DeleteMeta(...string)
 
 	// GetMeta returns the provider's current meta-data.
 	GetMeta() map[string]string
@@ -83,3 +91,7 @@ const (
 	// previous connected and is now in a wait-connect cycle
 	SessionStatusWaiting = SessionStatus("waiting")
 )
+
+type Meta struct {
+	Key, Value string
+}
