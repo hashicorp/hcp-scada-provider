@@ -81,7 +81,11 @@ type Provider struct {
 }
 
 // New creates a new SCADA provider instance using the configuration in config.
-func New(config *Config) (*Provider, error) {
+func New(config *Config) (SCADAProvider, error) {
+	return newProvider(config)
+}
+
+func newProvider(config *Config) (*Provider, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
