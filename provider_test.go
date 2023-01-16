@@ -187,7 +187,7 @@ func TestProvider_StartStop(t *testing.T) {
 	require := require.New(t)
 
 	// Create the provider, it should be stopped
-	p, err := New(testProviderConfig())
+	p, err := newProvider(testProviderConfig())
 	require.NoError(err)
 	require.True(p.isStopped())
 
@@ -224,7 +224,7 @@ func TestProvider_StartStop(t *testing.T) {
 
 func TestProvider_backoff(t *testing.T) {
 	require := require.New(t)
-	p, err := New(testProviderConfig())
+	p, err := newProvider(testProviderConfig())
 	require.NoError(err)
 
 	err = p.Start()
@@ -303,7 +303,7 @@ func TestProvider_Setup(t *testing.T) {
 	config := testProviderConfig()
 	config.HCPConfig = test.NewStaticHCPConfig(addr, false)
 
-	p, err := New(config)
+	p, err := newProvider(config)
 	require.NoError(err)
 
 	require.Equal(SessionStatusDisconnected, p.SessionStatus())
@@ -385,7 +385,7 @@ func TestProvider_Connect(t *testing.T) {
 	require := require.New(t)
 	config := testProviderConfig()
 
-	p, err := New(config)
+	p, err := newProvider(config)
 	p.handlers["foo"] = handler{
 		provider: fooCapability(t),
 	}
@@ -431,7 +431,7 @@ func TestProvider_Disconnect(t *testing.T) {
 	const testBackoff = 300 * time.Second
 	require := require.New(t)
 	config := testProviderConfig()
-	p, err := New(config)
+	p, err := newProvider(config)
 	require.NoError(err)
 
 	err = p.Start()
