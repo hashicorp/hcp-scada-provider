@@ -1,6 +1,12 @@
 # Changelog
 This file will contain all notable changes to this repository. Any new releases with changes will be documented here.
 
+## 0.2.2 (January 16 2023)
+Minor maintenance release.
+
+### Changed
+- Ensure `New()` has proper semantics
+
 ## 0.2.1 (January 11 2023)
 Minor maintenance release.
 
