@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 // listener is a capability that pushes the received connection into a
 // net.Listener. This capability allows exposing services that wrap a
 // listener such as gRPC or HTTP Servers very easily.
