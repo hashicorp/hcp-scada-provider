@@ -37,7 +37,7 @@ func (pe *providerEndpoint) setHijack(cb hijackFunc) {
 
 // Connect is invoked by the broker to connect to a capability.
 func (pe *providerEndpoint) Connect(args *ConnectRequest, resp *ConnectResponse) error {
-	pe.p.logger.Info("connect requested", "capability", args.Capability)
+	pe.p.logger.Debug("connect requested", "capability", args.Capability)
 
 	// Handle potential flash
 	if args.Severity != "" && args.Message != "" {
