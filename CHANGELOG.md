@@ -5,6 +5,7 @@ This file will contain all notable changes to this repository. Any new releases 
 Minor maintenance release.
 
 ### Changed
+- Change "connect requested" log from info to debug
 - Updated `golang.org/x/net` to `v0.7.0` to address numerous CVEs
 - Updated `golang.org/x/text` to `v0.3.8` to address numerous CVEs
 - Updated `go.mongodb.org/mongo-driver` to `v1.5.1` to address `CVE-2021-20329`
