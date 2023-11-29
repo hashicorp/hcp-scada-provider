@@ -732,3 +732,14 @@ func calculateExpiryFactor(d time.Duration) time.Duration {
 	d = time.Duration(factored) * time.Second
 	return d
 }
+
+// UpdateConfig overwrites the provider's configuration
+// with the given configuration.
+func (p *Provider) UpdateConfig(config *Config) error {
+	if err := config.Validate(); err != nil {
+		return err
+	}
+	p.config = config
+	p.logger = config.Logger.Named("scada-provider")
+	return nil
+}

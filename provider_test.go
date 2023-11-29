@@ -546,3 +546,34 @@ func TestProviderSetupRetrieveError(t *testing.T) {
 	require.Error(err)
 	require.Equal(ErrInvalidCredentials, err)
 }
+
+func TestProvider_UpdateConfig(t *testing.T) {
+	require := require.New(t)
+	originalConfig := testProviderConfig()
+	p, err := newProvider(originalConfig)
+	require.NoError(err)
+
+	updated := "updated-value"
+	updatedConfig := &Config{
+		Service: updated,
+		HCPConfig: test.NewStaticHCPConfig(
+			updated,
+			true,
+		),
+		Resource: cloud.HashicorpCloudLocationLink{
+			ID:   updated,
+			Type: resourceType,
+			Location: &cloud.HashicorpCloudLocationLocation{
+				ProjectID:      projectID,
+				OrganizationID: organizationID,
+			},
+		},
+		Logger: hclog.L(),
+	}
+
+	err = p.UpdateConfig(updatedConfig)
+	require.NoError(err)
+	require.Equal(updated, p.config.Service)
+	require.Equal(updated, p.config.HCPConfig.SCADAAddress())
+	require.Equal(updated, p.config.Resource.ID)
+}
