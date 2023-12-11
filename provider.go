@@ -58,7 +58,9 @@ type handler struct {
 // themselves as a Service providing capabilities. Provider manages the
 // client/server interactions required, making it simpler to integrate.
 type Provider struct {
-	config *Config
+	config     *Config
+	configLock sync.RWMutex
+
 	logger hclog.Logger
 
 	handlers     map[string]handler
@@ -476,6 +478,9 @@ func (p *Provider) run() context.CancelFunc {
 
 // connect sets up a new connection to a broker.
 func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
+	p.configLock.RLock()
+	defer p.configLock.RUnlock()
+
 	// Dial a new connection
 	opts := client.Opts{
 		Dialer: &tcp.Dialer{
@@ -511,6 +516,9 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *
 		capabilities[h] = 1
 	}
 	p.handlersLock.RUnlock()
+
+	p.configLock.RLock()
+	defer p.configLock.RUnlock()
 
 	var oauthToken *oauth2.Token
 	oauthToken, err = p.config.HCPConfig.Token()
@@ -685,6 +693,8 @@ func (p *Provider) backoffDuration() (time.Duration, bool) {
 	}
 
 	// Use the test backoff
+	p.configLock.RLock()
+	defer p.configLock.RUnlock()
 	if p.config.TestBackoff != 0 {
 		backoff = p.config.TestBackoff
 	}
@@ -736,6 +746,9 @@ func calculateExpiryFactor(d time.Duration) time.Duration {
 // UpdateConfig overwrites the provider's configuration
 // with the given configuration.
 func (p *Provider) UpdateConfig(config *Config) error {
+	p.configLock.Lock()
+	defer p.configLock.Unlock()
+
 	if err := config.Validate(); err != nil {
 		return err
 	}
