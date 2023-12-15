@@ -478,17 +478,19 @@ func (p *Provider) run() context.CancelFunc {
 
 // connect sets up a new connection to a broker.
 func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
-	p.configLock.RLock()
-	defer p.configLock.RUnlock()
-
 	// Dial a new connection
+	p.configLock.RLock()
+	tlsConfig := p.config.HCPConfig.SCADATLSConfig()
+	scadaAddress := p.config.HCPConfig.SCADAAddress()
+	p.configLock.RUnlock()
+
 	opts := client.Opts{
 		Dialer: &tcp.Dialer{
-			TLSConfig: p.config.HCPConfig.SCADATLSConfig(),
+			TLSConfig: tlsConfig,
 		},
 		LogOutput: p.logger.StandardWriter(&hclog.StandardLoggerOptions{InferLevels: true}),
 	}
-	client, err := client.DialOptsContext(ctx, p.config.HCPConfig.SCADAAddress(), &opts)
+	client, err := client.DialOptsContext(ctx, scadaAddress, &opts)
 	if err != nil {
 		p.logger.Error("failed to dial SCADA endpoint", "error", err)
 		return nil, err
@@ -517,11 +519,10 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *
 	}
 	p.handlersLock.RUnlock()
 
-	p.configLock.RLock()
-	defer p.configLock.RUnlock()
-
 	var oauthToken *oauth2.Token
+	p.configLock.RLock()
 	oauthToken, err = p.config.HCPConfig.Token()
+	p.configLock.RUnlock()
 	if err != nil {
 		client.Close()
 		err = PrefixError("failed to get access token", err)
@@ -533,9 +534,14 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *
 	p.metaLock.RLock()
 	defer p.metaLock.RUnlock()
 
+	p.configLock.RLock()
+	service := p.config.Service
+	resource := &p.config.Resource
+	p.configLock.RUnlock()
+
 	req := types.HandshakeRequest{
-		Service:  p.config.Service,
-		Resource: &p.config.Resource,
+		Service:  service,
+		Resource: resource,
 
 		AccessToken: oauthToken.AccessToken,
 
@@ -694,9 +700,10 @@ func (p *Provider) backoffDuration() (time.Duration, bool) {
 
 	// Use the test backoff
 	p.configLock.RLock()
-	defer p.configLock.RUnlock()
-	if p.config.TestBackoff != 0 {
-		backoff = p.config.TestBackoff
+	testBackoff := p.config.TestBackoff
+	p.configLock.RUnlock()
+	if testBackoff != 0 {
+		backoff = testBackoff
 	}
 
 	return backoff, p.noRetry
