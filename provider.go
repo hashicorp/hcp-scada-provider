@@ -760,6 +760,5 @@ func (p *Provider) UpdateConfig(config *Config) error {
 		return err
 	}
 	p.config = config
-	p.logger = config.Logger.Named("scada-provider")
 	return nil
 }
