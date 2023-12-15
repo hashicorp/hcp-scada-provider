@@ -519,8 +519,11 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *
 	}
 	p.handlersLock.RUnlock()
 
-	var oauthToken *oauth2.Token
+	// determine configuration values
 	p.configLock.RLock()
+	service := p.config.Service
+	resource := &p.config.Resource
+	var oauthToken *oauth2.Token
 	oauthToken, err = p.config.HCPConfig.Token()
 	p.configLock.RUnlock()
 	if err != nil {
@@ -533,11 +536,6 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *
 	// meta map while client.RPC is reading from it
 	p.metaLock.RLock()
 	defer p.metaLock.RUnlock()
-
-	p.configLock.RLock()
-	service := p.config.Service
-	resource := &p.config.Resource
-	p.configLock.RUnlock()
 
 	req := types.HandshakeRequest{
 		Service:  service,
@@ -690,11 +688,13 @@ func (p *Provider) backoffDuration() (time.Duration, bool) {
 
 	// Check for a server specified backoff
 	p.backoffLock.Lock()
-	defer p.backoffLock.Unlock()
-	if p.backoff != 0 {
-		backoff = p.backoff
+	providerBackoff := p.backoff
+	noRetry := p.noRetry
+	p.backoffLock.Unlock()
+	if providerBackoff != 0 {
+		backoff = providerBackoff
 	}
-	if p.noRetry {
+	if noRetry {
 		backoff = 0
 	}
 
@@ -706,7 +706,7 @@ func (p *Provider) backoffDuration() (time.Duration, bool) {
 		backoff = testBackoff
 	}
 
-	return backoff, p.noRetry
+	return backoff, noRetry
 }
 
 func (p *Provider) backoffReset() {
