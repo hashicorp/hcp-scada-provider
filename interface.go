@@ -68,6 +68,9 @@ type SCADAProvider interface {
 	//
 	// Any other internal error will be returned directly and unchanged.
 	LastError() (time.Time, error)
+
+	// UpdateConfig overwrites the provider's configuration with the given configuration.
+	UpdateConfig(config *Config) error
 }
 
 // SessionStatus is used to express the current status of the SCADA session.

@@ -58,7 +58,9 @@ type handler struct {
 // themselves as a Service providing capabilities. Provider manages the
 // client/server interactions required, making it simpler to integrate.
 type Provider struct {
-	config *Config
+	config     *Config
+	configLock sync.RWMutex
+
 	logger hclog.Logger
 
 	handlers     map[string]handler
@@ -477,13 +479,18 @@ func (p *Provider) run() context.CancelFunc {
 // connect sets up a new connection to a broker.
 func (p *Provider) connect(ctx context.Context) (*client.Client, error) {
 	// Dial a new connection
+	p.configLock.RLock()
+	tlsConfig := p.config.HCPConfig.SCADATLSConfig()
+	scadaAddress := p.config.HCPConfig.SCADAAddress()
+	p.configLock.RUnlock()
+
 	opts := client.Opts{
 		Dialer: &tcp.Dialer{
-			TLSConfig: p.config.HCPConfig.SCADATLSConfig(),
+			TLSConfig: tlsConfig,
 		},
 		LogOutput: p.logger.StandardWriter(&hclog.StandardLoggerOptions{InferLevels: true}),
 	}
-	client, err := client.DialOptsContext(ctx, p.config.HCPConfig.SCADAAddress(), &opts)
+	client, err := client.DialOptsContext(ctx, scadaAddress, &opts)
 	if err != nil {
 		p.logger.Error("failed to dial SCADA endpoint", "error", err)
 		return nil, err
@@ -512,8 +519,13 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *
 	}
 	p.handlersLock.RUnlock()
 
+	// determine configuration values
+	p.configLock.RLock()
+	service := p.config.Service
+	resource := &p.config.Resource
 	var oauthToken *oauth2.Token
 	oauthToken, err = p.config.HCPConfig.Token()
+	p.configLock.RUnlock()
 	if err != nil {
 		client.Close()
 		err = PrefixError("failed to get access token", err)
@@ -526,8 +538,8 @@ func (p *Provider) handshake(ctx context.Context, client *client.Client) (resp *
 	defer p.metaLock.RUnlock()
 
 	req := types.HandshakeRequest{
-		Service:  p.config.Service,
-		Resource: &p.config.Resource,
+		Service:  service,
+		Resource: resource,
 
 		AccessToken: oauthToken.AccessToken,
 
@@ -676,20 +688,25 @@ func (p *Provider) backoffDuration() (time.Duration, bool) {
 
 	// Check for a server specified backoff
 	p.backoffLock.Lock()
-	defer p.backoffLock.Unlock()
-	if p.backoff != 0 {
-		backoff = p.backoff
+	providerBackoff := p.backoff
+	noRetry := p.noRetry
+	p.backoffLock.Unlock()
+	if providerBackoff != 0 {
+		backoff = providerBackoff
 	}
-	if p.noRetry {
+	if noRetry {
 		backoff = 0
 	}
 
 	// Use the test backoff
-	if p.config.TestBackoff != 0 {
-		backoff = p.config.TestBackoff
+	p.configLock.RLock()
+	testBackoff := p.config.TestBackoff
+	p.configLock.RUnlock()
+	if testBackoff != 0 {
+		backoff = testBackoff
 	}
 
-	return backoff, p.noRetry
+	return backoff, noRetry
 }
 
 func (p *Provider) backoffReset() {
@@ -731,4 +748,17 @@ func calculateExpiryFactor(d time.Duration) time.Duration {
 	var factored = seconds * expiryFactor
 	d = time.Duration(factored) * time.Second
 	return d
+}
+
+// UpdateConfig overwrites the provider's configuration
+// with the given configuration.
+func (p *Provider) UpdateConfig(config *Config) error {
+	p.configLock.Lock()
+	defer p.configLock.Unlock()
+
+	if err := config.Validate(); err != nil {
+		return err
+	}
+	p.config = config
+	return nil
 }
