@@ -1,6 +1,11 @@
 # Changelog
 This file will contain all notable changes to this repository. Any new releases with changes will be documented here.
 
+## 0.2.4 (January 23 2024)
+
+### Changed
+- Support for updating the SCADA provider configuration
+
 ## 0.2.3 (April 7 2023)
 Minor maintenance release.
 
