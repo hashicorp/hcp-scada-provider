@@ -124,7 +124,7 @@ func (p *Provider) UpdateMeta(m map[string]string) {
 
 	// tell the run loop to re-handshake and update the broker
 	if err := p.action(actionRehandshake); err != nil {
-		p.logger.Warn("action not triggered (meta updated)", "error", err)
+		p.logger.Warn("actionRehandshake: not triggered for UpdateMeta", "error", err)
 	}
 }
 
