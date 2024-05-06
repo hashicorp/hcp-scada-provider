@@ -110,6 +110,8 @@ func newProvider(config *Config) (*Provider, error) {
 
 // UpdateMeta overwrites the internal map of meta-data values
 // and performs a re-handshake to update the remote broker.
+// If the provider isn't running, updated meta will be applied
+// after the provoder starts.
 func (p *Provider) UpdateMeta(m map[string]string) {
 	p.metaLock.Lock()
 	defer p.metaLock.Unlock()
