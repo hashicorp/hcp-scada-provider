@@ -18,9 +18,23 @@ func (p *Provider) action(a action) error {
 	defer p.runningLock.Unlock()
 
 	if !p.running {
+		p.logger.Warn("action not triggered", "action", actionStr(a), "reason", "provider isn't running")
 		return errNotRunning
 	}
 
 	p.actions <- a
 	return nil
+}
+
+func actionStr(a action) string {
+	switch a {
+	case actionDefault:
+		return "actionDefault"
+	case actionRehandshake:
+		return "actionRehandshake"
+	case actionDisconnect:
+		return "actionDisconnect"
+	default:
+		return "unknown action"
+	}
 }

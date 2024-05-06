@@ -125,9 +125,7 @@ func (p *Provider) UpdateMeta(m map[string]string) {
 	}
 
 	// tell the run loop to re-handshake and update the broker
-	if err := p.action(actionRehandshake); err != nil {
-		p.logger.Warn("actionRehandshake: not triggered for UpdateMeta", "error", err)
-	}
+	p.action(actionRehandshake)
 }
 
 // AddMeta upserts keys and values in the internal map of meta-data

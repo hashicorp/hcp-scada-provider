@@ -577,3 +577,17 @@ func TestProvider_UpdateConfig(t *testing.T) {
 	require.Equal(updated, p.config.HCPConfig.SCADAAddress())
 	require.Equal(updated, p.config.Resource.ID)
 }
+
+func TestProvider_actionStr(t *testing.T) {
+	testCases := []struct {
+		a           action
+		expectedStr string
+	}{
+		{actionDefault, "actionDefault"},
+		{actionRehandshake, "actionRehandshake"},
+		{actionDisconnect, "actionDisconnect"},
+	}
+	for _, tc := range testCases {
+		require.Equal(t, tc.expectedStr, actionStr(tc.a))
+	}
+}
