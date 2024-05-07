@@ -1,6 +1,11 @@
 # Changelog
 This file will contain all notable changes to this repository. Any new releases with changes will be documented here.
 
+## 0.2.5 (May 7 2024)
+
+### Changed
+- Log untriggered action if provider isn't running
+
 ## 0.2.4 (January 23 2024)
 
 ### Changed
