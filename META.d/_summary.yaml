@@ -7,7 +7,7 @@ partition: hcp
 category: library
 
 summary:
-  owner: team-cloud-platform-systems
+  owner: team-cloud-core-platform
   description: |
     The provider package establishes and maintains a long-lived connection to allow incoming requests to be served by components running in relative network isolation.
 
