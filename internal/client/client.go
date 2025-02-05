@@ -83,6 +83,8 @@ func initClient(conn net.Conn, opts *Opts) (*Client, error) {
 	}
 	_, err = client.Ping()
 	if err != nil {
+		// Close the connection here so that it isn't leaked if the ping fails.
+		client.Close()
 		return nil, fmt.Errorf("yamux ping failed: %w", err)
 	}
 
