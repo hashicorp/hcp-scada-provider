@@ -9,6 +9,9 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "America/New_York"
+    ignore:
+      - dependency-name: "github.com/hashicorp/yamux"
+        versions: ["*"]
     groups:
       gomod-breaking:
         update-types:
