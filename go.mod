@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/hashicorp/go-hclog v1.6.3
-	github.com/hashicorp/hcp-sdk-go v0.160.0
+	github.com/hashicorp/hcp-sdk-go v0.161.0
 	github.com/hashicorp/net-rpc-msgpackrpc/v2 v2.0.1
 	github.com/hashicorp/yamux v0.0.0-20211028200310-0bc27b27de87
 	github.com/stretchr/testify v1.11.1
