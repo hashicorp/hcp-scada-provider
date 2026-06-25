@@ -1,6 +1,11 @@
 # Changelog
 This file will contain all notable changes to this repository. Any new releases with changes will be documented here.
 
+## 0.2.6 (Jun 25 2026)
+### Fixed
+- Upgrading go version
+- Patching security vulnerability in grpc go
+
 ## 0.2.5 (May 7 2024)
 
 ### Changed
