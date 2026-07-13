@@ -4,13 +4,13 @@ go 1.25.0
 
 require (
 	github.com/hashicorp/go-hclog v1.6.3
-	github.com/hashicorp/hcp-sdk-go v0.173.0
+	github.com/hashicorp/hcp-sdk-go v0.174.0
 	github.com/hashicorp/net-rpc-msgpackrpc/v2 v2.0.1
 	github.com/hashicorp/yamux v0.1.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/oauth2 v0.36.0
-	golang.org/x/sync v0.21.0
-	google.golang.org/grpc v1.81.1
+	golang.org/x/sync v0.22.0
+	google.golang.org/grpc v1.82.0
 )
 
 require (
