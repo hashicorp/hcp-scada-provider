@@ -1,7 +1,7 @@
 # Copyright IBM Corp. 2022, 2026
 # SPDX-License-Identifier: MPL-2.0
 
-pack: go125
+pack: go126
 source:
     git:
         url: https://github.com/hashicorp/roam.git

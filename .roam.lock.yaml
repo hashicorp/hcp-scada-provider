@@ -1,0 +1,7 @@
+source:
+    git:
+        url: https://github.com/hashicorp/roam.git
+        path: static/manifest.yaml
+    version: b5bcb8d18c2974302880fe0b5f3d61246ef678e9
+    source_checksum: 538a406ddb437c7fa8e24b210ed3b03aa255b3fa62d238a96d3bc4fac688aabf
+    checksum: 9936e74a6c7188b6ee0e5823ef36d8ce2e64d6f2e77fb5df86a42adc233aa27e
