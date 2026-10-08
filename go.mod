@@ -1,6 +1,6 @@
 module github.com/hashicorp/hcp-scada-provider
 
-go 1.25.0
+go 1.26.2
 
 require (
 	github.com/hashicorp/go-hclog v1.6.3
