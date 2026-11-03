@@ -31,6 +31,31 @@ url = "https://github.com/bufbuild/buf/releases/download/v1.56.0/buf-Darwin-x86_
 url_api = "https://api.github.com/repos/bufbuild/buf/releases/assets/278190220"
 provenance = "minisign"
 
+[[tools."github:golang-migrate/migrate"]]
+version = "4.18.3"
+backend = "github:golang-migrate/migrate"
+specifiers = ["4.18.3"]
+
+[tools."github:golang-migrate/migrate"."platforms.linux-arm64"]
+checksum = "sha256:4a94c63259006ffd4e24c311c7118d85687dbeb4f310fadd66d796173c8768d9"
+url = "https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/golang-migrate/migrate/releases/assets/249032778"
+
+[tools."github:golang-migrate/migrate"."platforms.linux-x64"]
+checksum = "sha256:60c59c0cac50e99172d95135b2f421863c4b2f4a67709e66daae024d652fa1b5"
+url = "https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/golang-migrate/migrate/releases/assets/249032767"
+
+[tools."github:golang-migrate/migrate"."platforms.macos-arm64"]
+checksum = "sha256:c6e3cb3dcd7354e05b1800b1c532af7bcc7a043121e4fa377b8a4b0b5bcc1b58"
+url = "https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.darwin-arm64.tar.gz"
+url_api = "https://api.github.com/repos/golang-migrate/migrate/releases/assets/249032782"
+
+[tools."github:golang-migrate/migrate"."platforms.macos-x64"]
+checksum = "sha256:ea108e639eb49caf92fadf70fa373dceb48db25e5b962774c5ad49a1c1363d8e"
+url = "https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.darwin-amd64.tar.gz"
+url_api = "https://api.github.com/repos/golang-migrate/migrate/releases/assets/249032781"
+
 [[tools.go]]
 version = "1.26.2"
 backend = "core:go"
@@ -86,11 +111,6 @@ specifiers = ["1.19.1"]
 version = "1.4.0"
 backend = "go:github.com/favadi/protoc-go-inject-tag"
 specifiers = ["1.4.0"]
-
-[[tools."go:github.com/golang-migrate/migrate/v4/cmd/migrate"]]
-version = "4.18.3"
-backend = "go:github.com/golang-migrate/migrate/v4/cmd/migrate"
-specifiers = ["4.18.3"]
 
 [[tools."go:github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway"]]
 version = "2.27.1"
