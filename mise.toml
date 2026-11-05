@@ -1,0 +1,29 @@
+# Migrated from roam pack 'go126'; versions are a like-for-like carry-over of `roam show`.
+[tools]
+go = "1.26.2"
+golangci-lint = "2.9.0"
+gotestsum = "1.12.3"
+buf = "1.56.0"
+"go:github.com/hashicorp/go-dep-check" = "0.3.0"
+go-swagger = "0.32.3"
+"go:github.com/joho/godotenv/cmd/godotenv" = "1.5.1"
+gofumpt = "0.6.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.1.4"
+jq = "1.8.1"
+"github:golang-migrate/migrate" = "4.18.3"
+mockery = "3.6.4"
+protoc = "32.0"
+"go:google.golang.org/protobuf/cmd/protoc-gen-go" = "1.36.7"
+"go:github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc" = "1.5.1"
+"go:connectrpc.com/connect/cmd/protoc-gen-connect-go" = "1.19.1"
+"go:github.com/favadi/protoc-go-inject-tag" = "1.4.0"
+"go:google.golang.org/grpc/cmd/protoc-gen-go-grpc" = "1.5.1"
+"go:github.com/mitchellh/protoc-gen-go-json" = "1.1.0"
+"go:github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway" = "2.27.1"
+"go:github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2" = "2.27.1"
+terraform = "1.12.2"
+"go:github.com/wakeful/yaml2json" = "0.6.0"
+
+[settings]
+# Record resolved versions and checksums in mise.lock. `mise install --locked` enforces it.
+lockfile = true
