@@ -1,4 +1,3 @@
-# Migrated from roam pack 'go126'; versions are a like-for-like carry-over of `roam show`.
 [tools]
 go = "1.26.2"
 golangci-lint = "2.9.0"
